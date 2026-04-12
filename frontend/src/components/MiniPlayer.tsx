@@ -5,6 +5,7 @@ import {
   Image,
   TouchableOpacity,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../theme/colors';
@@ -19,7 +20,7 @@ interface Props {
  * Tapping it opens the full NowPlaying modal.
  */
 export default function MiniPlayer({ onPress }: Props) {
-  const { currentSong, isPlaying, togglePlay, playNext } = usePlayerStore();
+  const { currentSong, isPlaying, isLoading, togglePlay, playNext } = usePlayerStore();
 
   if (!currentSong) return null;
 
@@ -45,12 +46,17 @@ export default function MiniPlayer({ onPress }: Props) {
         onPress={(e) => { e.stopPropagation(); togglePlay(); }}
         style={styles.btn}
         hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        disabled={isLoading}
       >
-        <Ionicons
-          name={isPlaying ? 'pause' : 'play'}
-          size={26}
-          color={Colors.textPrimary}
-        />
+        {isLoading ? (
+          <ActivityIndicator size="small" color={Colors.primary} />
+        ) : (
+          <Ionicons
+            name={isPlaying ? 'pause' : 'play'}
+            size={26}
+            color={Colors.textPrimary}
+          />
+        )}
       </TouchableOpacity>
 
       {/* Skip next */}

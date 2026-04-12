@@ -19,6 +19,12 @@ export async function getSongDetails(videoId: string): Promise<Song> {
   return response.data;
 }
 
+/** Fetch a direct audio stream URL via the backend's Invidious proxy */
+export async function getStreamUrl(youtubeId: string): Promise<string> {
+  const response = await api.get<{ url: string }>(`/songs/${youtubeId}/stream`);
+  return response.data.url;
+}
+
 /** Notify backend that a song started playing (updates history + feeds recommendations) */
 export async function recordPlay(youtubeId: string): Promise<void> {
   await api.post('/history', { youtubeId });

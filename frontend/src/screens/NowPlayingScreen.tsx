@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -6,122 +6,110 @@ import {
   TouchableOpacity,
   Image,
   Dimensions,
+  ActivityIndicator,
   Alert,
 } from 'react-native';
+import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
-import YoutubePlayer, { YoutubeIframeRef } from 'react-native-youtube-iframe';
 import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme/colors';
 import { usePlayerStore } from '../store/playerStore';
-import { getRecommendations } from '../services/musicService';
 
 const { width: SCREEN_W } = Dimensions.get('window');
+const ART_SIZE = SCREEN_W - 56;
+
+function formatMs(ms: number): string {
+  const totalSec = Math.floor(ms / 1000);
+  const min = Math.floor(totalSec / 60);
+  const sec = totalSec % 60;
+  return `${min}:${sec.toString().padStart(2, '0')}`;
+}
 
 export default function NowPlayingScreen() {
   const navigation = useNavigation();
   const {
     currentSong,
     isPlaying,
+    isLoading,
     queue,
     queueIndex,
     repeatMode,
+    positionMs,
+    durationMs,
     togglePlay,
     playNext,
     playPrevious,
+    seekTo,
     setRepeatMode,
-    playSong,
   } = usePlayerStore();
 
-  const playerRef = useRef<YoutubeIframeRef>(null);
-  const [playerError, setPlayerError] = useState(false);
-
-  const handlePlayerError = useCallback(() => {
-    setPlayerError(true);
-    Alert.alert(
-      'Playback Error',
-      'This video could not be loaded. It may be unavailable or restricted.',
-      [{ text: 'OK', onPress: () => navigation.goBack() }],
-    );
-  }, [navigation]);
-
-  /** Auto-play next track when the current one ends */
-  const handleStateChange = useCallback(
-    async (state: string) => {
-      if (state === 'ended') {
-        if (queue.length > 0) {
-          playNext();
-        } else {
-          // No queue – load YouTube recommendations for this song
-          try {
-            const recs = await getRecommendations();
-            if (recs.length > 0) {
-              playSong(recs[0], recs, null);
-            }
-          } catch (_) {
-            // ignore – just stop playing
-          }
-        }
-      }
-    },
-    [playNext, playSong, queue],
-  );
-
   const cycleRepeat = () => {
-    const modes = ['none', 'all', 'one'] as const;
-    const next = modes[(modes.indexOf(repeatMode) + 1) % modes.length];
-    setRepeatMode(next);
+    const modes: Array<typeof repeatMode> = ['none', 'all', 'one'];
+    setRepeatMode(modes[(modes.indexOf(repeatMode) + 1) % modes.length]);
   };
 
-  const repeatIcon = () => {
-    if (repeatMode === 'one') return 'repeat-outline';
-    return 'repeat-outline';
+  const handleSeek = (value: number) => {
+    seekTo(value).catch(() => {});
   };
 
-  const repeatColor = () => {
-    if (repeatMode === 'none') return Colors.iconInactive;
-    return Colors.primary;
+  const handlePlayNext = () => {
+    playNext().catch((e: Error) => {
+      Alert.alert('Playback error', e.message);
+    });
+  };
+
+  const handlePlayPrevious = () => {
+    playPrevious().catch((e: Error) => {
+      Alert.alert('Playback error', e.message);
+    });
+  };
+
+  const handleToggle = () => {
+    togglePlay().catch((e: Error) => {
+      Alert.alert('Playback error', e.message);
+    });
   };
 
   if (!currentSong) return null;
 
+  const repeatColor = repeatMode !== 'none' ? Colors.primary : Colors.iconInactive;
+  const hasPrev = queueIndex > 0;
+  const hasNext = queueIndex < queue.length - 1 || repeatMode !== 'none';
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Back button */}
-      <TouchableOpacity style={styles.backBtn} onPress={() => navigation.goBack()}>
-        <Ionicons name="chevron-down" size={28} color={Colors.textPrimary} />
-      </TouchableOpacity>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Ionicons name="chevron-down" size={28} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <Text style={styles.contextLabel}>
+          {queue.length > 1 ? `${queueIndex + 1} / ${queue.length}` : 'Now Playing'}
+        </Text>
+        <View style={{ width: 44 }} />
+      </View>
 
-      <Text style={styles.contextLabel}>
-        {queue.length > 1 ? `Playing from queue` : 'Now Playing'}
-      </Text>
-
-      {/* YouTube Player (hidden – audio only UX) */}
-      {!playerError && (
-        <View style={styles.playerWrapper}>
-          <YoutubePlayer
-            ref={playerRef}
-            height={SCREEN_W * 0.56}
-            width={SCREEN_W - 40}
-            videoId={currentSong.youtubeId}
-            play={isPlaying}
-            onChangeState={handleStateChange}
-            onError={handlePlayerError}
-            webViewProps={{
-              allowsInlineMediaPlayback: true,
-              mediaPlaybackRequiresUserAction: false,
-            }}
+      {/* Album art */}
+      <View style={styles.artContainer}>
+        {currentSong.thumbnailUrl ? (
+          <Image
+            source={{ uri: currentSong.thumbnailUrl }}
+            style={styles.art}
+            resizeMode="cover"
           />
-        </View>
-      )}
-
-      {/* Album art fallback (thumbnail) */}
-      <Image
-        source={{ uri: currentSong.thumbnailUrl }}
-        style={styles.thumbnail}
-        resizeMode="cover"
-      />
+        ) : (
+          <View style={[styles.art, styles.artPlaceholder]}>
+            <Ionicons name="musical-notes" size={64} color={Colors.primary} />
+          </View>
+        )}
+        {isLoading && (
+          <View style={styles.artOverlay}>
+            <ActivityIndicator size="large" color={Colors.primary} />
+          </View>
+        )}
+      </View>
 
       {/* Song info */}
       <View style={styles.info}>
@@ -133,57 +121,73 @@ export default function NowPlayingScreen() {
         </Text>
       </View>
 
+      {/* Progress bar */}
+      <View style={styles.progressContainer}>
+        <Slider
+          style={styles.slider}
+          minimumValue={0}
+          maximumValue={durationMs || 1}
+          value={positionMs}
+          onSlidingComplete={handleSeek}
+          minimumTrackTintColor={Colors.primary}
+          maximumTrackTintColor={Colors.divider}
+          thumbTintColor={Colors.primary}
+          disabled={durationMs === 0}
+        />
+        <View style={styles.timeRow}>
+          <Text style={styles.timeText}>{formatMs(positionMs)}</Text>
+          <Text style={styles.timeText}>{formatMs(durationMs)}</Text>
+        </View>
+      </View>
+
       {/* Controls */}
       <View style={styles.controls}>
-        {/* Previous */}
         <TouchableOpacity
-          onPress={playPrevious}
-          disabled={queueIndex === 0}
+          onPress={handlePlayPrevious}
+          disabled={!hasPrev}
           style={styles.controlBtn}
         >
           <Ionicons
             name="play-skip-back"
             size={32}
-            color={queueIndex === 0 ? Colors.iconInactive : Colors.textPrimary}
+            color={hasPrev ? Colors.textPrimary : Colors.iconInactive}
           />
         </TouchableOpacity>
 
-        {/* Play / Pause */}
-        <TouchableOpacity style={styles.playBtn} onPress={togglePlay}>
+        <TouchableOpacity style={styles.playBtn} onPress={handleToggle} disabled={isLoading}>
           <LinearGradient
             colors={[Colors.primary, Colors.primaryDark]}
             style={styles.playBtnGradient}
           >
-            <Ionicons
-              name={isPlaying ? 'pause' : 'play'}
-              size={36}
-              color="#fff"
-            />
+            {isLoading ? (
+              <ActivityIndicator color="#fff" size="small" />
+            ) : (
+              <Ionicons name={isPlaying ? 'pause' : 'play'} size={36} color="#fff" />
+            )}
           </LinearGradient>
         </TouchableOpacity>
 
-        {/* Next */}
-        <TouchableOpacity onPress={playNext} style={styles.controlBtn}>
-          <Ionicons name="play-skip-forward" size={32} color={Colors.textPrimary} />
+        <TouchableOpacity
+          onPress={handlePlayNext}
+          disabled={!hasNext}
+          style={styles.controlBtn}
+        >
+          <Ionicons
+            name="play-skip-forward"
+            size={32}
+            color={hasNext ? Colors.textPrimary : Colors.iconInactive}
+          />
         </TouchableOpacity>
       </View>
 
-      {/* Repeat + Queue position */}
+      {/* Repeat */}
       <View style={styles.extras}>
         <TouchableOpacity onPress={cycleRepeat} style={styles.extraBtn}>
-          <Ionicons name={repeatIcon()} size={22} color={repeatColor()} />
+          <Ionicons name="repeat-outline" size={22} color={repeatColor} />
           {repeatMode === 'one' && (
             <Text style={[styles.repeatBadge, { color: Colors.primary }]}>1</Text>
           )}
         </TouchableOpacity>
-
-        {queue.length > 1 && (
-          <Text style={styles.queuePos}>
-            {queueIndex + 1} / {queue.length}
-          </Text>
-        )}
-
-        <View style={styles.extraBtn} />
       </View>
     </SafeAreaView>
   );
@@ -196,56 +200,89 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
   },
-  backBtn: {
-    alignSelf: 'flex-start',
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
     paddingTop: 8,
-    paddingBottom: 4,
+    marginBottom: 24,
   },
+  backBtn: { padding: 4 },
   contextLabel: {
     fontSize: 12,
     fontWeight: '600',
     color: Colors.textMuted,
     letterSpacing: 1,
     textTransform: 'uppercase',
-    marginBottom: 20,
   },
-  playerWrapper: {
-    borderRadius: 12,
+  artContainer: {
+    width: ART_SIZE,
+    height: ART_SIZE,
+    borderRadius: 16,
     overflow: 'hidden',
-    marginBottom: 8,
+    marginBottom: 32,
+    backgroundColor: Colors.surfaceAlt,
+    // Subtle shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
   },
-  thumbnail: {
-    width: SCREEN_W - 40,
-    height: (SCREEN_W - 40) * 0.56,
-    borderRadius: 12,
-    marginBottom: 8,
-    // Only shown when player is not rendering
-    position: 'absolute',
-    top: 100,
-    zIndex: -1,
+  art: {
+    width: '100%',
+    height: '100%',
+  },
+  artPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  artOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(0,0,0,0.45)',
   },
   info: {
     width: '100%',
-    marginTop: 24,
-    marginBottom: 32,
+    marginBottom: 24,
+    paddingHorizontal: 4,
   },
   title: {
     fontSize: 22,
     fontWeight: '800',
     color: Colors.textPrimary,
-    textAlign: 'center',
   },
   artist: {
     fontSize: 15,
     color: Colors.textSecondary,
-    marginTop: 6,
-    textAlign: 'center',
+    marginTop: 4,
+  },
+  progressContainer: {
+    width: '100%',
+    marginBottom: 8,
+  },
+  slider: {
+    width: '100%',
+    height: 40,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 4,
+    marginTop: -4,
+  },
+  timeText: {
+    fontSize: 12,
+    color: Colors.textMuted,
   },
   controls: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 28,
+    gap: 32,
+    marginTop: 8,
     marginBottom: 24,
   },
   controlBtn: { padding: 8 },
@@ -260,20 +297,20 @@ const styles = StyleSheet.create({
   extras: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'center',
     width: '100%',
-    paddingHorizontal: 12,
   },
-  extraBtn: { padding: 8, width: 44, alignItems: 'center' },
+  extraBtn: {
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+    position: 'relative',
+  },
   repeatBadge: {
     fontSize: 10,
     fontWeight: '800',
     position: 'absolute',
-    bottom: 4,
-    right: 4,
-  },
-  queuePos: {
-    fontSize: 13,
-    color: Colors.textMuted,
+    bottom: 2,
+    right: 2,
   },
 });

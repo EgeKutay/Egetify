@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
-import Constants from 'expo-constants';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
 import * as Google from 'expo-auth-session/providers/google';
 import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '../theme/colors';
@@ -51,6 +51,14 @@ function googleIdsConfiguredForPlatform(): boolean {
   return !!WEB_CLIENT_ID;
 }
 
+/** Expo Go always uses exp://… redirects; Google Cloud rejects those for Web OAuth clients, so native Google sign-in cannot work there. */
+function isExpoGoNativeClient(): boolean {
+  return Platform.OS !== 'web' && Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+}
+
+/** Stable reference for expo-auth-session (new [] each render would churn the auth hook). */
+const GOOGLE_AUTH_SCOPES = ['openid', 'profile', 'email'] as const;
+
 type GoogleSignInRowProps = {
   webClientId: string;
   androidClientId: string;
@@ -75,13 +83,29 @@ function GoogleSignInRow({
 }: GoogleSignInRowProps) {
   const warnedNoRequest = useRef(false);
   const [isPromptingGoogle, setIsPromptingGoogle] = useState(false);
+  /** Prevents duplicate backend login if the OAuth hook re-emits the same id_token. */
+  const lastExchangedIdToken = useRef<string | null>(null);
 
-  const [request, response, promptAsync] = Google.useIdTokenAuthRequest({
-    androidClientId: androidClientId || undefined,
-    iosClientId: iosClientId || undefined,
-    webClientId: webClientId || undefined,
-    scopes: ['openid', 'profile', 'email'],
-  });
+  const googleAuthConfig = useMemo(
+    () => ({
+      androidClientId: androidClientId || undefined,
+      iosClientId: iosClientId || undefined,
+      webClientId: webClientId || undefined,
+      scopes: [...GOOGLE_AUTH_SCOPES],
+    }),
+    [androidClientId, iosClientId, webClientId]
+  );
+
+  const [request, response, promptAsync] = Google.useIdTokenAuthRequest(googleAuthConfig);
+
+  useEffect(() => {
+    if (!__DEV__ || !request?.redirectUri || isExpoGoNativeClient()) return;
+    console.warn(
+      '[Google OAuth] Dev build / web: if Google reports redirect_uri errors, register this exact redirect URI\n' +
+        'on your OAuth client (Web client → Authorized redirect URIs; must be https:// or http://localhost per Google rules).\n',
+      request.redirectUri
+    );
+  }, [request]);
 
   useEffect(() => {
     if (request || warnedNoRequest.current) return;
@@ -101,7 +125,11 @@ function GoogleSignInRow({
     if (response?.type === 'success') {
       const idToken = response.params?.id_token;
       if (idToken) {
-        loginWithToken(idToken);
+        if (lastExchangedIdToken.current === idToken) return;
+        lastExchangedIdToken.current = idToken;
+        void Promise.resolve(loginWithToken(idToken)).catch(() => {
+          lastExchangedIdToken.current = null;
+        });
       } else {
         if (__DEV__) {
           console.warn('[GoogleSignIn] Success but no id_token in params:', response.params);
@@ -129,9 +157,17 @@ function GoogleSignInRow({
         'Another Google sign-in is already running. Finish or close it, or restart the app and try again.'
       );
     }
+    if (
+      response?.type === 'dismiss' ||
+      response?.type === 'cancel' ||
+      response?.type === 'error' ||
+      response?.type === 'locked'
+    ) {
+      lastExchangedIdToken.current = null;
+    }
   }, [response, loginWithToken]);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     // Always log here: Metro only shows device logs when the JS runtime is connected (USB / same LAN).
     console.warn('[Egetify] Google sign-in pressed, request ready:', !!request);
     clearError();
@@ -142,17 +178,22 @@ function GoogleSignInRow({
       );
       return;
     }
-    setIsPromptingGoogle(true);
-    try {
-      const promptResult = await promptAsync();
-      if (__DEV__) console.log('[GoogleSignIn] promptAsync result:', promptResult?.type);
-    } catch (e) {
-      const message = e instanceof Error ? e.message : String(e);
-      if (__DEV__) console.error('[GoogleSignIn] promptAsync error:', e);
-      Alert.alert('Sign-in failed', message);
-    } finally {
-      setIsPromptingGoogle(false);
-    }
+    // Defer heavy work off the native touch/press stack — avoids Android ANRs when opening Custom Tabs.
+    setTimeout(() => {
+      void (async () => {
+        setIsPromptingGoogle(true);
+        try {
+          const promptResult = await promptAsync();
+          if (__DEV__) console.log('[GoogleSignIn] promptAsync result:', promptResult?.type);
+        } catch (e) {
+          const message = e instanceof Error ? e.message : String(e);
+          console.warn('[GoogleSignIn] promptAsync error:', message);
+          Alert.alert('Sign-in failed', message);
+        } finally {
+          setIsPromptingGoogle(false);
+        }
+      })();
+    }, 0);
   };
 
   const busy = isLoading || isPromptingGoogle;
@@ -182,7 +223,10 @@ function GoogleSignInRow({
 }
 
 export default function LoginScreen() {
-  const { loginWithToken, isLoading, error, clearError } = useAuthStore();
+  const loginWithToken = useAuthStore((s) => s.loginWithToken);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const error = useAuthStore((s) => s.error);
+  const clearError = useAuthStore((s) => s.clearError);
 
   useEffect(() => {
     if (__DEV__) {
@@ -214,7 +258,6 @@ export default function LoginScreen() {
       colors={[Colors.background, Colors.primaryDark, Colors.background]}
       locations={[0, 0.5, 1]}
       style={styles.container}
-      pointerEvents="box-none"
     >
       <View style={styles.brandContainer}>
         <View style={styles.logoCircle}>
@@ -237,8 +280,27 @@ export default function LoginScreen() {
         ))}
       </View>
 
-      {googleIdsConfiguredForPlatform() ? (
-        <View style={styles.googleButtonWrap} collapsable={false}>
+      {!googleIdsConfiguredForPlatform() ? (
+        <View style={styles.configHintBox}>
+          <Text style={styles.configHintTitle}>Google Sign-In is not configured</Text>
+          <Text style={styles.configHintText}>
+            Add the right EXPO_PUBLIC_GOOGLE_* values to frontend/.env for this platform (see .env.template), then
+            restart Expo with a clean cache: npx expo start -c
+          </Text>
+        </View>
+      ) : isExpoGoNativeClient() ? (
+        <View style={styles.configHintBox}>
+          <Text style={styles.configHintTitle}>Google Sign-In does not run in Expo Go</Text>
+          <Text style={styles.configHintText}>
+            Expo Go uses an exp:// redirect URI. Google’s Web OAuth client only allows https:// (and limited
+            http://localhost) redirect URIs, so exp:// is rejected and sign-in cannot complete here. Use a
+            development build instead: from the frontend folder run npx expo run:android or npx expo run:ios, then
+            add your debug SHA-1 and package name (see app.json) to a Google Cloud Android OAuth client. Or test
+            sign-in on Expo web (press w in Metro) with localhost redirect URIs registered on your Web client.
+          </Text>
+        </View>
+      ) : (
+        <View style={styles.googleButtonWrap}>
           <GoogleSignInRow
             webClientId={WEB_CLIENT_ID}
             androidClientId={ANDROID_CLIENT_ID}
@@ -247,14 +309,6 @@ export default function LoginScreen() {
             isLoading={isLoading}
             clearError={clearError}
           />
-        </View>
-      ) : (
-        <View style={styles.configHintBox}>
-          <Text style={styles.configHintTitle}>Google Sign-In is not configured</Text>
-          <Text style={styles.configHintText}>
-            Add the right EXPO_PUBLIC_GOOGLE_* values to frontend/.env for this platform (see .env.template), then
-            restart Expo with a clean cache: npx expo start -c
-          </Text>
         </View>
       )}
 
@@ -285,8 +339,7 @@ const styles = StyleSheet.create({
   appName: { fontSize: 42, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 2 },
   tagline: { fontSize: 16, color: Colors.textSecondary, marginTop: 6 },
   features: { width: '100%', marginBottom: 48 },
-  /** Own stacking context so the sign-in control reliably receives touches on Android. */
-  googleButtonWrap: { width: '100%', zIndex: 2, elevation: 2 },
+  googleButtonWrap: { width: '100%' },
   featureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
   featureIcon: { marginRight: 12 },
   featureText: { fontSize: 16, color: Colors.textSecondary },

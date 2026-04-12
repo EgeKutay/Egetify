@@ -1,14 +1,25 @@
 import { create } from 'zustand';
+import { Audio, AVPlaybackStatus } from 'expo-av';
 import { Song, Playlist, RepeatMode, PlayerState } from '../types';
-import { recordPlay } from '../services/musicService';
+import { recordPlay, getStreamUrl } from '../services/musicService';
+
+// Enable background audio + lock-screen controls once at module load
+Audio.setAudioModeAsync({
+  allowsRecordingIOS: false,
+  stayAwakeDuringPlayback: true,
+  playsInSilentModeIOS: true,
+  shouldDuckAndroid: false,
+  playThroughEarpieceAndroid: false,
+}).catch(() => {});
 
 interface PlayerActions {
-  playSong: (song: Song, queue?: Song[], playlist?: Playlist | null) => void;
-  togglePlay: () => void;
-  playNext: () => void;
-  playPrevious: () => void;
+  playSong: (song: Song, queue?: Song[], playlist?: Playlist | null) => Promise<void>;
+  togglePlay: () => Promise<void>;
+  playNext: () => Promise<void>;
+  playPrevious: () => Promise<void>;
+  seekTo: (positionMs: number) => Promise<void>;
   setRepeatMode: (mode: RepeatMode) => void;
-  clearPlayer: () => void;
+  clearPlayer: () => Promise<void>;
 }
 
 const initialState: PlayerState = {
@@ -16,20 +27,27 @@ const initialState: PlayerState = {
   queue: [],
   queueIndex: 0,
   isPlaying: false,
+  isLoading: false,
   repeatMode: 'none',
   playlistContext: null,
+  positionMs: 0,
+  durationMs: 0,
 };
+
+// Sound instance lives outside the store so Zustand doesn't serialize it
+let _sound: Audio.Sound | null = null;
+
+async function unloadCurrent() {
+  if (_sound) {
+    try { await _sound.unloadAsync(); } catch (_) {}
+    _sound = null;
+  }
+}
 
 export const usePlayerStore = create<PlayerState & PlayerActions>((set, get) => ({
   ...initialState,
 
-  /**
-   * Start playing a song.
-   * @param song     The song to play immediately.
-   * @param queue    Optional queue (e.g. all songs in a playlist). Defaults to [song].
-   * @param playlist The playlist context (for auto-next logic).
-   */
-  playSong: (song, queue = [], playlist = null) => {
+  playSong: async (song, queue = [], playlist = null) => {
     const fullQueue = queue.length > 0 ? queue : [song];
     const index = fullQueue.findIndex((s) => s.youtubeId === song.youtubeId);
 
@@ -37,22 +55,58 @@ export const usePlayerStore = create<PlayerState & PlayerActions>((set, get) => 
       currentSong: song,
       queue: fullQueue,
       queueIndex: index >= 0 ? index : 0,
-      isPlaying: true,
       playlistContext: playlist ?? null,
+      isLoading: true,
+      positionMs: 0,
+      durationMs: 0,
     });
 
-    // Fire-and-forget – don't block the UI on this
     recordPlay(song.youtubeId).catch(() => {});
+
+    await unloadCurrent();
+
+    try {
+      const streamUrl = await getStreamUrl(song.youtubeId);
+
+      const { sound } = await Audio.Sound.createAsync(
+        { uri: streamUrl },
+        { shouldPlay: true, progressUpdateIntervalMillis: 500 },
+        (status: AVPlaybackStatus) => {
+          if (!status.isLoaded) return;
+          set({
+            positionMs: status.positionMillis ?? 0,
+            durationMs: status.durationMillis ?? 0,
+            isPlaying: status.isPlaying,
+          });
+          if (status.didJustFinish) {
+            get().playNext();
+          }
+        },
+      );
+
+      _sound = sound;
+      set({ isLoading: false, isPlaying: true });
+    } catch (e) {
+      set({ isLoading: false, isPlaying: false });
+      throw e;
+    }
   },
 
-  togglePlay: () => set((state) => ({ isPlaying: !state.isPlaying })),
+  togglePlay: async () => {
+    if (!_sound) return;
+    const { isPlaying } = get();
+    if (isPlaying) {
+      await _sound.pauseAsync();
+    } else {
+      await _sound.playAsync();
+    }
+  },
 
-  playNext: () => {
+  playNext: async () => {
     const { queue, queueIndex, repeatMode } = get();
     if (queue.length === 0) return;
 
     let nextIndex: number;
-
     if (repeatMode === 'one') {
       nextIndex = queueIndex;
     } else if (queueIndex < queue.length - 1) {
@@ -60,25 +114,40 @@ export const usePlayerStore = create<PlayerState & PlayerActions>((set, get) => 
     } else if (repeatMode === 'all') {
       nextIndex = 0;
     } else {
-      // End of queue – stop
       set({ isPlaying: false });
       return;
     }
 
     const nextSong = queue[nextIndex];
-    set({ currentSong: nextSong, queueIndex: nextIndex, isPlaying: true });
-    recordPlay(nextSong.youtubeId).catch(() => {});
+    set({ currentSong: nextSong, queueIndex: nextIndex });
+    await get().playSong(nextSong, queue, get().playlistContext);
   },
 
-  playPrevious: () => {
-    const { queue, queueIndex } = get();
-    if (queue.length === 0 || queueIndex === 0) return;
+  playPrevious: async () => {
+    const { queue, queueIndex, positionMs } = get();
+    if (queue.length === 0) return;
+
+    // If more than 3 s in, restart the current song
+    if (positionMs > 3000 && _sound) {
+      await _sound.setPositionAsync(0);
+      return;
+    }
+
+    if (queueIndex === 0) return;
     const prev = queue[queueIndex - 1];
-    set({ currentSong: prev, queueIndex: queueIndex - 1, isPlaying: true });
-    recordPlay(prev.youtubeId).catch(() => {});
+    await get().playSong(prev, queue, get().playlistContext);
+  },
+
+  seekTo: async (positionMs: number) => {
+    if (_sound) {
+      await _sound.setPositionAsync(positionMs);
+    }
   },
 
   setRepeatMode: (mode) => set({ repeatMode: mode }),
 
-  clearPlayer: () => set(initialState),
+  clearPlayer: async () => {
+    await unloadCurrent();
+    set(initialState);
+  },
 }));

@@ -39,11 +39,14 @@ export type RepeatMode = 'none' | 'all' | 'one';
 
 export interface PlayerState {
   currentSong: Song | null;
-  queue: Song[];           // songs queued (e.g. from a playlist)
-  queueIndex: number;      // current position in queue
+  queue: Song[];
+  queueIndex: number;
   isPlaying: boolean;
+  isLoading: boolean;
   repeatMode: RepeatMode;
-  playlistContext: Playlist | null;  // set when playing from a playlist
+  playlistContext: Playlist | null;
+  positionMs: number;
+  durationMs: number;
 }
 
 // ── Navigation ────────────────────────────────────────────────────────────────
