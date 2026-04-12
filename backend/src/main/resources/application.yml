@@ -1,0 +1,40 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/egetify
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update          # auto-creates/updates tables on startup
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+  main:
+    allow-bean-definition-overriding: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# ──────────────────────────────────────────────
+#  REPLACE the placeholders below with your own keys
+#  Get them from: https://console.cloud.google.com/
+# ──────────────────────────────────────────────
+app:
+  youtube:
+    api-key: ${YOUTUBE_API_KEY:YOUR_YOUTUBE_API_KEY}
+    max-results: 20
+  google:
+    client-id: ${GOOGLE_CLIENT_ID:YOUR_GOOGLE_CLIENT_ID}
+  jwt:
+    secret: ${JWT_SECRET:egetify-super-secret-jwt-key-change-in-production-min-256-bits}
+    expiration-ms: 86400000     # 24 hours
+
+logging:
+  level:
+    com.egetify: DEBUG
+    org.springframework.security: INFO
