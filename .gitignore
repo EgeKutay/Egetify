@@ -1,11 +1,29 @@
-# ── Secrets / config with API keys ───────────────────────────────────────────
-backend/src/main/resources/application.yml
-backend/src/main/resources/application-local.yml
-frontend/app.json
+# ── Secrets / local config (never commit real keys) ───────────────────────────
+# Frontend: copy .env.template → .env ; app.json.template → app.json
 frontend/.env
-frontend/.env.local
+frontend/.env.*
+!frontend/.env.template
+frontend/app.json
 
-# ── Backend build output ──────────────────────────────────────────────────────
+# Backend: use application-local.yml for DB/JWT/Google overrides (optional)
+backend/src/main/resources/application-local.yml
+
+# Google / Firebase mobile client files (if you add them later)
+**/google-services.json
+**/GoogleService-Info.plist
+
+# Service account JSON (server-side Google APIs)
+**/*service-account*.json
+**/credentials.json
+
+# Android signing
+*.jks
+*.keystore
+
+# Accidental Windows env-expansion artifact
+frontend/%ProgramData%/
+
+# ── Backend build output ─────────────────────────────────────────────────────
 backend/target/
 *.class
 *.jar
@@ -19,21 +37,19 @@ replay_pid*
 frontend/node_modules/
 frontend/.expo/
 frontend/dist/
-frontend/.env
-frontend/.env.local
 
-# ── Logs ─────────────────────────────────────────────────────────────────────
+# ── Logs ───────────────────────────────────────────────────────────────────────
 *.log
 npm-debug.log*
 
-# ── OS / IDE ──────────────────────────────────────────────────────────────────
+# ── OS / IDE ───────────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db
 .idea/
 *.iml
 .vscode/settings.json
 
-# ── Misc Java ─────────────────────────────────────────────────────────────────
+# ── Misc Java ──────────────────────────────────────────────────────────────────
 .mtj.tmp/
 *.ctxt
 *.zip

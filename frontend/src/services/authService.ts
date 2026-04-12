@@ -1,10 +1,6 @@
-import * as WebBrowser from 'expo-web-browser';
 import * as SecureStore from 'expo-secure-store';
 import api from './api';
 import { AuthResponse, User } from '../types';
-
-// Required for expo-auth-session to close the browser on redirect
-WebBrowser.maybeCompleteAuthSession();
 
 const TOKEN_KEY = 'access_token';
 const USER_KEY  = 'user_profile';

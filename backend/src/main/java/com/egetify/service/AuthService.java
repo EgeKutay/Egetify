@@ -15,7 +15,9 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Collections;
+import java.util.Arrays;
+import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * Handles Google Sign-In token verification and JWT issuance.
@@ -37,13 +39,20 @@ public class AuthService {
 
     public AuthService(UserRepository userRepository,
                        JwtTokenProvider tokenProvider,
-                       @Value("${app.google.client-id}") String googleClientId) throws Exception {
+                       @Value("${app.google.client-id}") String googleClientIds) throws Exception {
         this.userRepository = userRepository;
         this.tokenProvider = tokenProvider;
+        List<String> audiences = Arrays.stream(googleClientIds.split(","))
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        if (audiences.isEmpty()) {
+            throw new IllegalArgumentException("app.google.client-id must contain at least one Google OAuth client ID");
+        }
         this.googleVerifier = new GoogleIdTokenVerifier.Builder(
                 GoogleNetHttpTransport.newTrustedTransport(),
                 GsonFactory.getDefaultInstance())
-                .setAudience(Collections.singletonList(googleClientId))
+                .setAudience(audiences)
                 .build();
     }
 
