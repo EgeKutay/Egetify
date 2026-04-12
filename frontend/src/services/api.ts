@@ -1,9 +1,9 @@
 import axios, { AxiosInstance } from 'axios';
 import * as SecureStore from 'expo-secure-store';
-import Constants from 'expo-constants';
 
+// EXPO_PUBLIC_ variables are injected at build time from frontend/.env
 const BASE_URL =
-  Constants.expoConfig?.extra?.apiBaseUrl ?? 'http://10.0.2.2:8080/api';
+  process.env.EXPO_PUBLIC_API_BASE_URL ?? 'http://10.0.2.2:8080/api';
 
 // 10.0.2.2 is the Android emulator's alias for the host machine (localhost)
 

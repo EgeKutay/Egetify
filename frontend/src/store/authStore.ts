@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { User } from '../types';
-import { signInWithGoogle, signOut, getStoredToken } from '../services/authService';
+import { loginWithIdToken, signOut, restoreSession } from '../services/authService';
 
 interface AuthState {
   user: User | null;
@@ -8,8 +8,10 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
 
-  login: () => Promise<void>;
+  /** Called from LoginScreen after expo-auth-session returns a Google ID token */
+  loginWithToken: (idToken: string) => Promise<void>;
   logout: () => Promise<void>;
+  /** Called once on app launch — restores persisted session so user stays logged in */
   checkAuth: () => Promise<void>;
   clearError: () => void;
 }
@@ -17,14 +19,13 @@ interface AuthState {
 export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   isAuthenticated: false,
-  isLoading: false,
+  isLoading: true,   // true on launch until checkAuth completes
   error: null,
 
-  /** Trigger Google Sign-In flow */
-  login: async () => {
+  loginWithToken: async (idToken: string) => {
     set({ isLoading: true, error: null });
     try {
-      const user = await signInWithGoogle();
+      const user = await loginWithIdToken(idToken);
       set({ user, isAuthenticated: true, isLoading: false });
     } catch (err: any) {
       set({ error: err.message ?? 'Login failed', isLoading: false });
@@ -36,16 +37,22 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null, isAuthenticated: false });
   },
 
-  /** Called on app launch to restore session */
+  /**
+   * Runs at app startup.
+   * If a token + profile are stored, the user is logged straight in —
+   * no sign-in screen shown.
+   */
   checkAuth: async () => {
-    const token = await getStoredToken();
-    if (!token) {
-      set({ isAuthenticated: false });
+    try {
+      const session = await restoreSession();
+      if (session) {
+        set({ user: session.user, isAuthenticated: true, isLoading: false });
+      } else {
+        set({ isAuthenticated: false, isLoading: false });
+      }
+    } catch {
+      set({ isAuthenticated: false, isLoading: false });
     }
-    // Token existence is enough to mark as authenticated;
-    // the API interceptor attaches it to every request.
-    // A 401 response will clear it automatically.
-    set({ isAuthenticated: !!token });
   },
 
   clearError: () => set({ error: null }),

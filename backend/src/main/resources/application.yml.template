@@ -1,0 +1,39 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/egetify
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  main:
+    allow-bean-definition-overriding: true
+
+server:
+  port: 8080
+  servlet:
+    context-path: /api
+
+# ──────────────────────────────────────────────
+#  Copy this file to application.yml and fill in
+#  your real keys. Never commit application.yml.
+# ──────────────────────────────────────────────
+app:
+  youtube:
+    api-key: YOUR_YOUTUBE_API_KEY
+    max-results: 20
+  google:
+    client-id: YOUR_GOOGLE_WEB_CLIENT_ID
+  jwt:
+    secret: CHANGE_THIS_TO_A_LONG_RANDOM_STRING
+    expiration-ms: 86400000
+
+logging:
+  level:
+    com.egetify: DEBUG
+    org.springframework.security: INFO

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,22 +6,56 @@ import {
   StyleSheet,
   ActivityIndicator,
   Alert,
-  Image,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Ionicons } from '@expo/vector-icons';
+import * as Google from 'expo-auth-session/providers/google';
+import * as WebBrowser from 'expo-web-browser';
 import { Colors } from '../theme/colors';
 import { useAuthStore } from '../store/authStore';
 
-export default function LoginScreen() {
-  const { login, isLoading, error, clearError } = useAuthStore();
+// Required for expo-auth-session to close the browser tab after redirect
+WebBrowser.maybeCompleteAuthSession();
 
-  const handleLogin = async () => {
-    clearError();
-    await login();
-    if (error) {
-      Alert.alert('Sign-in failed', error);
+const WEB_CLIENT_ID     = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
+const ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? '';
+
+export default function LoginScreen() {
+  const { loginWithToken, isLoading, error, clearError } = useAuthStore();
+
+  // androidClientId = initiates the OAuth flow on Android
+  // webClientId     = passed as serverClientId so the returned ID token
+  //                   has the web client ID as its audience (matches backend)
+  const [request, response, promptAsync] = Google.useAuthRequest({
+    androidClientId: ANDROID_CLIENT_ID,
+    webClientId: WEB_CLIENT_ID,
+    scopes: ['openid', 'profile', 'email'],
+  });
+
+  // React to the result of the Google auth flow
+  useEffect(() => {
+    if (response?.type === 'success') {
+      const idToken = response.params?.id_token;
+      if (idToken) {
+        loginWithToken(idToken);
+      } else {
+        Alert.alert('Sign-in failed', 'Google did not return an ID token. Try again.');
+      }
+    } else if (response?.type === 'error') {
+      Alert.alert('Sign-in failed', response.error?.message ?? 'Unknown error');
     }
+  }, [response]);
+
+  // Surface store-level errors (e.g. backend rejected the token)
+  useEffect(() => {
+    if (error) {
+      Alert.alert('Sign-in failed', error, [{ text: 'OK', onPress: clearError }]);
+    }
+  }, [error]);
+
+  const handleLogin = () => {
+    clearError();
+    promptAsync();
   };
 
   return (
@@ -30,7 +64,7 @@ export default function LoginScreen() {
       locations={[0, 0.5, 1]}
       style={styles.container}
     >
-      {/* Logo / branding */}
+      {/* Logo */}
       <View style={styles.brandContainer}>
         <View style={styles.logoCircle}>
           <Ionicons name="musical-notes" size={56} color={Colors.primary} />
@@ -42,17 +76,12 @@ export default function LoginScreen() {
       {/* Feature bullets */}
       <View style={styles.features}>
         {[
-          { icon: 'search', text: 'Search millions of songs' },
-          { icon: 'list', text: 'Build your playlists' },
-          { icon: 'play-circle', text: 'Play with YouTube' },
+          { icon: 'search',       text: 'Search millions of songs' },
+          { icon: 'list',         text: 'Build your playlists' },
+          { icon: 'play-circle',  text: 'Play with YouTube' },
         ].map(({ icon, text }) => (
           <View key={text} style={styles.featureRow}>
-            <Ionicons
-              name={icon as any}
-              size={20}
-              color={Colors.primary}
-              style={styles.featureIcon}
-            />
+            <Ionicons name={icon as any} size={20} color={Colors.primary} style={styles.featureIcon} />
             <Text style={styles.featureText}>{text}</Text>
           </View>
         ))}
@@ -60,9 +89,9 @@ export default function LoginScreen() {
 
       {/* Sign-in button */}
       <TouchableOpacity
-        style={[styles.googleButton, isLoading && styles.buttonDisabled]}
+        style={[styles.googleButton, (!request || isLoading) && styles.buttonDisabled]}
         onPress={handleLogin}
-        disabled={isLoading}
+        disabled={!request || isLoading}
         activeOpacity={0.85}
       >
         {isLoading ? (
@@ -89,10 +118,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     paddingHorizontal: 32,
   },
-  brandContainer: {
-    alignItems: 'center',
-    marginBottom: 48,
-  },
+  brandContainer: { alignItems: 'center', marginBottom: 48 },
   logoCircle: {
     width: 110,
     height: 110,
@@ -104,33 +130,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: Colors.primary,
   },
-  appName: {
-    fontSize: 42,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-    letterSpacing: 2,
-  },
-  tagline: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    marginTop: 6,
-  },
-  features: {
-    width: '100%',
-    marginBottom: 48,
-  },
-  featureRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  featureIcon: {
-    marginRight: 12,
-  },
-  featureText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-  },
+  appName: { fontSize: 42, fontWeight: '800', color: Colors.textPrimary, letterSpacing: 2 },
+  tagline:  { fontSize: 16, color: Colors.textSecondary, marginTop: 6 },
+  features: { width: '100%', marginBottom: 48 },
+  featureRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 16 },
+  featureIcon: { marginRight: 12 },
+  featureText: { fontSize: 16, color: Colors.textSecondary },
   googleButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -142,18 +147,7 @@ const styles = StyleSheet.create({
     width: '100%',
     gap: 10,
   },
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-  googleButtonText: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.background,
-  },
-  disclaimer: {
-    marginTop: 24,
-    fontSize: 12,
-    color: Colors.textMuted,
-    textAlign: 'center',
-  },
+  buttonDisabled: { opacity: 0.7 },
+  googleButtonText: { fontSize: 17, fontWeight: '700', color: Colors.background },
+  disclaimer: { marginTop: 24, fontSize: 12, color: Colors.textMuted, textAlign: 'center' },
 });

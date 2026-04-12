@@ -7,29 +7,36 @@ Personal YouTube music streaming app for Android (Samsung S21FE).
 
 ## Before You Start — Required API Keys
 
-You need **two** things from [Google Cloud Console](https://console.cloud.google.com/):
+Get these from [Google Cloud Console](https://console.cloud.google.com/) (enable **YouTube Data API v3** and **Google Identity**):
 
-| What | Where to get it | Where to put it |
-|------|-----------------|-----------------|
-| **YouTube Data API v3 key** | APIs & Services → Credentials → API Key | `backend/src/main/resources/application.yml` → `app.youtube.api-key` |
-| **Google OAuth 2.0 Web Client ID** | APIs & Services → Credentials → OAuth 2.0 Client (Web) | `backend/src/main/resources/application.yml` → `app.google.client-id` |
-| **Google OAuth 2.0 Android Client ID** | APIs & Services → Credentials → OAuth 2.0 Client (Android) | `frontend/app.json` → `extra.googleWebClientId` |
-
-> Enable these APIs in your project: **YouTube Data API v3**, **Google Identity**.
+| What | Where to put it |
+|------|-----------------|
+| **YouTube Data API v3 key** | `backend/src/main/resources/application-local.yml` → `app.youtube.api-key` |
+| **Google OAuth 2.0 Web Client ID** | `backend/src/main/resources/application-local.yml` → `app.google.client-id` |
+| **Google OAuth 2.0 Android Client ID** | `frontend/.env` → `EXPO_PUBLIC_GOOGLE_CLIENT_ID` |
 
 ---
 
 ## Prerequisites
 
-| Tool | Required version |
-|------|-----------------|
-| JDK | 21+ |
-| Maven | 3.9+ |
-| Node.js | 18+ |
-| npm | 9+ |
-| PostgreSQL | 14+ |
-| Android Studio + emulator | Pixel / Galaxy profile, API 31+ |
-| Expo CLI | Latest (`npm install -g expo-cli`) |
+| Tool | Required version | Your version |
+|------|-----------------|--------------|
+| JDK | 17+ | ✅ 17 |
+| Maven | 3.8+ | ✅ 3.8.3 |
+| Node.js | 18+ | ✅ 22 |
+| PostgreSQL | 14+ | ⚠️ Install needed |
+| Android Studio + emulator | API 31+ | — |
+
+### Install PostgreSQL
+
+Download from [postgresql.org/download/windows](https://www.postgresql.org/download/windows/)  
+Default port `5432`, set a password for the `postgres` user during install.
+
+Then create the database — open **pgAdmin** or run in PowerShell:
+
+```powershell
+& "C:\Program Files\PostgreSQL\16\bin\psql.exe" -U postgres -c "CREATE DATABASE egetify;"
+```
 
 ---
 
@@ -37,7 +44,7 @@ You need **two** things from [Google Cloud Console](https://console.cloud.google
 
 ```
 Egetify/
-├── backend/          ← Spring Boot Java API
+├── backend/          ← Spring Boot Java API (port 8080)
 │   ├── pom.xml
 │   └── src/
 │       ├── main/java/com/egetify/
@@ -52,7 +59,8 @@ Egetify/
 │
 └── frontend/         ← React Native / Expo
     ├── App.tsx
-    ├── app.json
+    ├── app.json          (gitignored — contains client ID)
+    ├── .env              (gitignored — contains client ID)
     └── src/
         ├── components/   (SongCard, MiniPlayer, SearchBar)
         ├── navigation/   (AppNavigator – stack + bottom tabs)
@@ -65,51 +73,34 @@ Egetify/
 
 ---
 
-## 1  Set Up PostgreSQL
+## 1  Fill in API Keys
 
-Run in PowerShell (requires psql on PATH):
-
-```powershell
-psql -U postgres -c "CREATE DATABASE egetify;"
-```
-
-Or create the database via pgAdmin / any GUI.
-
----
-
-## 2  Configure API Keys
-
-Open `backend\src\main\resources\application.yml` and replace the placeholders:
+Open `backend\src\main\resources\application-local.yml`:
 
 ```yaml
 app:
   youtube:
-    api-key: YOUR_YOUTUBE_API_KEY          # <- paste here
+    api-key: YOUR_YOUTUBE_API_KEY        # <- paste here
   google:
-    client-id: YOUR_GOOGLE_CLIENT_ID       # <- paste here
+    client-id: YOUR_GOOGLE_WEB_CLIENT_ID # <- paste here
 ```
 
-Open `frontend\app.json` and replace:
+`frontend\.env` is already populated with your Android Client ID.  
+If you need to change it:
 
-```json
-"extra": {
-  "googleWebClientId": "YOUR_GOOGLE_WEB_CLIENT_ID"
-}
+```
+EXPO_PUBLIC_GOOGLE_CLIENT_ID=your_android_client_id.apps.googleusercontent.com
 ```
 
 ---
 
-## 3  Run the Backend
+## 2  Run the Backend
 
 ```powershell
-# Navigate to backend folder
 cd backend
 
-# Download Maven wrapper (first time only)
-mvn -N io.takari:maven:wrapper
-
-# Build and start (downloads all dependencies on first run, ~2 min)
-.\mvnw.cmd spring-boot:run
+# First run downloads all dependencies (~2 min)
+mvn spring-boot:run -Dspring-boot.run.profiles=local
 ```
 
 The API will be available at `http://localhost:8080/api`
@@ -118,16 +109,15 @@ The API will be available at `http://localhost:8080/api`
 
 ```powershell
 cd backend
-.\mvnw.cmd test
-# HTML report saved to: backend\target\cucumber-report.html
+mvn test
+# HTML report: backend\target\cucumber-report.html
 ```
 
 ---
 
-## 4  Run the Frontend
+## 3  Run the Frontend
 
 ```powershell
-# Navigate to frontend folder
 cd frontend
 
 # Install dependencies (first time only, ~1-2 min)
@@ -137,11 +127,11 @@ npm install
 npx expo start
 ```
 
-Then press **`a`** in the Expo terminal to open on the **Android emulator**  
-(make sure your emulator is already running in Android Studio).
+Then press **`a`** in the Expo terminal to open on the Android emulator  
+(make sure your emulator is already running in Android Studio first).
 
-> **Note:** The Android emulator routes `10.0.2.2` to your host machine.  
-> The frontend is pre-configured to call `http://10.0.2.2:8080/api` — no changes needed for emulator.
+> The Android emulator routes `10.0.2.2` → your host machine.  
+> The frontend is pre-configured to call `http://10.0.2.2:8080/api` — no changes needed.
 
 ### Run frontend tests
 
@@ -152,50 +142,36 @@ npm test
 
 ---
 
-## 5  Using a Physical Android Device (Samsung S21FE)
+## 4  Using a Physical Android Device (Samsung S21FE)
 
 1. Enable **Developer Options** → **USB Debugging** on the phone
 2. Connect via USB
-3. Find your PC's local IP in PowerShell: `ipconfig` → IPv4 under your Wi-Fi adapter
-4. Update `frontend\app.json`:
-   ```json
-   "extra": { "apiBaseUrl": "http://YOUR_PC_IP:8080/api" }
+3. Find your PC's local IP: run `ipconfig` in PowerShell → IPv4 under Wi-Fi adapter
+4. Edit `frontend\.env`:
+   ```
+   EXPO_PUBLIC_API_BASE_URL=http://YOUR_PC_IP:8080/api
    ```
 5. Run `npx expo start --android`
 
 ---
 
-## 6  Environment Variables (optional — avoids editing yml directly)
-
-```powershell
-$env:YOUTUBE_API_KEY    = "your_youtube_api_key"
-$env:GOOGLE_CLIENT_ID   = "your_google_client_id"
-$env:DB_USERNAME        = "postgres"
-$env:DB_PASSWORD        = "postgres"
-$env:JWT_SECRET         = "a-long-random-secret-string"
-
-cd backend
-.\mvnw.cmd spring-boot:run
-```
-
----
-
-## 7  Deploy Backend to AWS EC2
+## 5  Deploy Backend to AWS EC2
 
 ```powershell
 # 1. Build fat JAR
 cd backend
-.\mvnw.cmd clean package -DskipTests
+mvn clean package -DskipTests
 
-# 2. Copy JAR to EC2
+# 2. Copy to EC2
 scp -i "your-key.pem" target\egetify-backend-0.0.1-SNAPSHOT.jar ec2-user@YOUR_EC2_IP:~/
 
-# 3. SSH into EC2 and run
+# 3. SSH and run
 ssh -i "your-key.pem" ec2-user@YOUR_EC2_IP
 java -jar egetify-backend-0.0.1-SNAPSHOT.jar `
-  --spring.datasource.url=jdbc:postgresql://localhost:5432/egetify `
+  --spring.profiles.active=local `
   --app.youtube.api-key=YOUR_KEY `
-  --app.google.client-id=YOUR_CLIENT_ID
+  --app.google.client-id=YOUR_CLIENT_ID `
+  --spring.datasource.password=YOUR_DB_PASSWORD
 ```
 
 ---
@@ -219,16 +195,8 @@ java -jar egetify-backend-0.0.1-SNAPSHOT.jar `
 
 ---
 
-## Build Phases
-
-- **Phase 1 (complete):** Google auth, YouTube search, basic player, home feed
-- **Phase 2 (complete):** Playlist CRUD, auto-play next, YouTube recommendations
-- **Phase 3 (complete):** Error screens, Cucumber BDD tests, connection error handling
-
----
-
 ## Known Limitations
 
-- **Background audio:** The YouTube IFrame player (via `react-native-youtube-iframe`) may pause when the app is fully backgrounded on some Android versions due to WebView restrictions. This is a YouTube platform limitation for embedded players.
-- **YouTube ToS:** This app is for personal, non-commercial use only as per YouTube's Terms of Service.
-- **Daily quota:** YouTube Data API has a 10,000 unit/day limit. Search costs 100 units/call; metadata costs 1 unit/call. All results are cached in PostgreSQL to minimise usage.
+- **Background audio:** The YouTube IFrame player may pause when fully backgrounded on Android due to WebView restrictions — a YouTube platform limitation for embedded players.
+- **YouTube ToS:** Personal, non-commercial use only.
+- **Daily quota:** YouTube Data API allows 10,000 units/day. Search = 100 units/call, metadata = 1 unit/call. All results cached in PostgreSQL.

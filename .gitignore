@@ -1,24 +1,41 @@
-# Compiled class file
+# ── Secrets / config with API keys ───────────────────────────────────────────
+backend/src/main/resources/application.yml
+backend/src/main/resources/application-local.yml
+frontend/app.json
+frontend/.env
+frontend/.env.local
+
+# ── Backend build output ──────────────────────────────────────────────────────
+backend/target/
 *.class
-
-# Log file
-*.log
-
-# BlueJ files
-*.ctxt
-
-# Mobile Tools for Java (J2ME)
-.mtj.tmp/
-
-# Package Files #
 *.jar
 *.war
 *.nar
 *.ear
+hs_err_pid*
+replay_pid*
+
+# ── Frontend / Node ───────────────────────────────────────────────────────────
+frontend/node_modules/
+frontend/.expo/
+frontend/dist/
+frontend/.env
+frontend/.env.local
+
+# ── Logs ─────────────────────────────────────────────────────────────────────
+*.log
+npm-debug.log*
+
+# ── OS / IDE ──────────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+.vscode/settings.json
+
+# ── Misc Java ─────────────────────────────────────────────────────────────────
+.mtj.tmp/
+*.ctxt
 *.zip
 *.tar.gz
 *.rar
-
-# virtual machine crash logs, see http://www.java.com/en/download/help/error_hotspot.xml
-hs_err_pid*
-replay_pid*

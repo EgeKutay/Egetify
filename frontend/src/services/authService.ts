@@ -1,57 +1,39 @@
-import {
-  GoogleSignin,
-  statusCodes,
-} from '@react-native-google-signin/google-signin';
+import * as WebBrowser from 'expo-web-browser';
 import * as SecureStore from 'expo-secure-store';
-import Constants from 'expo-constants';
 import api from './api';
 import { AuthResponse, User } from '../types';
 
-const GOOGLE_WEB_CLIENT_ID =
-  Constants.expoConfig?.extra?.googleWebClientId ?? 'YOUR_GOOGLE_WEB_CLIENT_ID';
+// Required for expo-auth-session to close the browser on redirect
+WebBrowser.maybeCompleteAuthSession();
 
-/** Call once at app startup (e.g. in App.tsx) */
-export function configureGoogleSignIn() {
-  GoogleSignin.configure({
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    offlineAccess: false,
-  });
-}
+const TOKEN_KEY = 'access_token';
+const USER_KEY  = 'user_profile';
 
 /**
- * Initiates Google Sign-In, sends the ID token to our backend,
- * and persists the returned JWT.
- * Returns the user profile on success.
+ * After expo-auth-session returns a Google ID token, send it to our backend.
+ * The backend verifies it and returns a JWT + user profile.
+ * Both are persisted in SecureStore so the session survives app restarts.
  */
-export async function signInWithGoogle(): Promise<User> {
-  await GoogleSignin.hasPlayServices();
-  const userInfo = await GoogleSignin.signIn();
-
-  if (!userInfo.idToken) {
-    throw new Error('Google Sign-In did not return an ID token');
-  }
-
-  const response = await api.post<AuthResponse>('/auth/google', {
-    idToken: userInfo.idToken,
-  });
-
+export async function loginWithIdToken(idToken: string): Promise<User> {
+  const response = await api.post<AuthResponse>('/auth/google', { idToken });
   const { accessToken, user } = response.data;
-  await SecureStore.setItemAsync('access_token', accessToken);
+
+  // Persist both token and profile — restores session on next launch
+  await SecureStore.setItemAsync(TOKEN_KEY, accessToken);
+  await SecureStore.setItemAsync(USER_KEY, JSON.stringify(user));
 
   return user;
 }
 
 export async function signOut(): Promise<void> {
-  try {
-    await GoogleSignin.revokeAccess();
-    await GoogleSignin.signOut();
-  } catch (_) {
-    // ignore errors on sign-out
-  }
-  await SecureStore.deleteItemAsync('access_token');
+  await SecureStore.deleteItemAsync(TOKEN_KEY);
+  await SecureStore.deleteItemAsync(USER_KEY);
 }
 
-/** Returns stored token, or null if not signed in */
-export async function getStoredToken(): Promise<string | null> {
-  return SecureStore.getItemAsync('access_token');
+/** Restores a previously saved session. Returns null if none exists. */
+export async function restoreSession(): Promise<{ token: string; user: User } | null> {
+  const token = await SecureStore.getItemAsync(TOKEN_KEY);
+  const userJson = await SecureStore.getItemAsync(USER_KEY);
+  if (!token || !userJson) return null;
+  return { token, user: JSON.parse(userJson) as User };
 }
