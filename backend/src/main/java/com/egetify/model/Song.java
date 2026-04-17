@@ -47,6 +47,10 @@ public class Song {
     @Column(name = "duration_formatted")
     private String durationFormatted;
 
+    /** Music genre extracted from YouTube topicDetails (e.g. "Rock music") */
+    @Column
+    private String genre;
+
     /** When this cache entry was last fetched from YouTube */
     @Column(name = "cached_at")
     private LocalDateTime cachedAt;

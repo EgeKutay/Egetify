@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,8 @@ import {
   Dimensions,
   ActivityIndicator,
   Alert,
+  Modal,
+  FlatList,
 } from 'react-native';
 import Slider from '@react-native-community/slider';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -16,6 +18,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../theme/colors';
 import { usePlayerStore } from '../store/playerStore';
+import { usePlaylistStore } from '../store/playlistStore';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const ART_SIZE = SCREEN_W - 56;
@@ -29,6 +32,8 @@ function formatMs(ms: number): string {
 
 export default function NowPlayingScreen() {
   const navigation = useNavigation();
+  const [showPlaylists, setShowPlaylists] = useState(false);
+  const { playlists, fetchPlaylists, addSong } = usePlaylistStore();
   const {
     currentSong,
     isPlaying,
@@ -44,6 +49,22 @@ export default function NowPlayingScreen() {
     seekTo,
     setRepeatMode,
   } = usePlayerStore();
+
+  const handleAddToPlaylist = async () => {
+    await fetchPlaylists();
+    setShowPlaylists(true);
+  };
+
+  const handleSelectPlaylist = async (playlistId: number) => {
+    setShowPlaylists(false);
+    if (!currentSong) return;
+    try {
+      await addSong(playlistId, currentSong.youtubeId);
+      Alert.alert('Added', `"${currentSong.title}" added to playlist.`);
+    } catch {
+      Alert.alert('Error', 'Could not add song to playlist.');
+    }
+  };
 
   const cycleRepeat = () => {
     const modes: Array<typeof repeatMode> = ['none', 'all', 'one'];
@@ -74,7 +95,6 @@ export default function NowPlayingScreen() {
 
   if (!currentSong) return null;
 
-  const repeatColor = repeatMode !== 'none' ? Colors.primary : Colors.iconInactive;
   const hasPrev = queueIndex > 0;
   const hasNext = queueIndex < queue.length - 1 || repeatMode !== 'none';
 
@@ -88,7 +108,17 @@ export default function NowPlayingScreen() {
         <Text style={styles.contextLabel}>
           {queue.length > 1 ? `${queueIndex + 1} / ${queue.length}` : 'Now Playing'}
         </Text>
-        <View style={{ width: 44 }} />
+        <View style={styles.headerActions}>
+          <TouchableOpacity onPress={cycleRepeat} style={styles.headerBtn}>
+            <Ionicons name="repeat-outline" size={22} color={repeatMode !== 'none' ? Colors.primary : Colors.iconInactive} />
+            {repeatMode === 'one' && (
+              <Text style={[styles.repeatBadge, { color: Colors.primary }]}>1</Text>
+            )}
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleAddToPlaylist} style={styles.headerBtn}>
+            <Ionicons name="add-circle-outline" size={22} color={Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Album art */}
@@ -119,6 +149,11 @@ export default function NowPlayingScreen() {
         <Text style={styles.artist} numberOfLines={1}>
           {currentSong.channelTitle}
         </Text>
+        {currentSong.genre ? (
+          <Text style={styles.genre} numberOfLines={1}>
+            {currentSong.genre}
+          </Text>
+        ) : null}
       </View>
 
       {/* Progress bar */}
@@ -180,15 +215,29 @@ export default function NowPlayingScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Repeat */}
-      <View style={styles.extras}>
-        <TouchableOpacity onPress={cycleRepeat} style={styles.extraBtn}>
-          <Ionicons name="repeat-outline" size={22} color={repeatColor} />
-          {repeatMode === 'one' && (
-            <Text style={[styles.repeatBadge, { color: Colors.primary }]}>1</Text>
-          )}
+
+      {/* Add to playlist modal */}
+      <Modal visible={showPlaylists} transparent animationType="slide">
+        <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowPlaylists(false)} activeOpacity={1}>
+          <View style={styles.modalSheet}>
+            <Text style={styles.modalTitle}>Add to Playlist</Text>
+            {playlists.length === 0 ? (
+              <Text style={styles.modalEmpty}>No playlists yet. Create one in Library.</Text>
+            ) : (
+              <FlatList
+                data={playlists}
+                keyExtractor={(p) => String(p.id)}
+                renderItem={({ item }) => (
+                  <TouchableOpacity style={styles.modalItem} onPress={() => handleSelectPlaylist(item.id)}>
+                    <Ionicons name="musical-notes" size={18} color={Colors.primary} />
+                    <Text style={styles.modalItemText}>{item.name}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            )}
+          </View>
         </TouchableOpacity>
-      </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -209,6 +258,8 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   backBtn: { padding: 4 },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  headerBtn: { padding: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' },
   contextLabel: {
     fontSize: 12,
     fontWeight: '600',
@@ -259,6 +310,13 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 4,
   },
+  genre: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+  },
   progressContainer: {
     width: '100%',
     marginBottom: 8,
@@ -299,6 +357,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
+    marginBottom: 32,
   },
   extraBtn: {
     padding: 8,
@@ -312,5 +371,41 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 2,
     right: 2,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    maxHeight: '60%',
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 16,
+  },
+  modalEmpty: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    paddingVertical: 16,
+  },
+  modalItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  modalItemText: {
+    fontSize: 16,
+    color: Colors.textPrimary,
   },
 });

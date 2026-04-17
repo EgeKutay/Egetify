@@ -21,7 +21,7 @@ export async function getSongDetails(videoId: string): Promise<Song> {
 
 /** Fetch a direct audio stream URL via the backend's Invidious proxy */
 export async function getStreamUrl(youtubeId: string): Promise<string> {
-  const response = await api.get<{ url: string }>(`/songs/${youtubeId}/stream`);
+  const response = await api.get<{ url: string }>(`/songs/${youtubeId}/stream`, { timeout: 60000 });
   return response.data.url;
 }
 

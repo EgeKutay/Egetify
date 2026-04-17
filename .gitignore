@@ -49,6 +49,9 @@ Thumbs.db
 *.iml
 .vscode/settings.json
 
+# ── Local docs ─────────────────────────────────────────────────────────────────
+servercommands.md
+
 # ── Misc Java ──────────────────────────────────────────────────────────────────
 .mtj.tmp/
 *.ctxt

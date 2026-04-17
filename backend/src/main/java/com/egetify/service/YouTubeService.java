@@ -55,7 +55,10 @@ public class YouTubeService {
     record VideoResponse(List<VideoItem> items) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
-    record VideoItem(String id, Snippet snippet, ContentDetails contentDetails) {}
+    record VideoItem(String id, Snippet snippet, ContentDetails contentDetails, TopicDetails topicDetails) {}
+
+    @JsonIgnoreProperties(ignoreUnknown = true)
+    record TopicDetails(List<String> topicCategories) {}
 
     @JsonIgnoreProperties(ignoreUnknown = true)
     record Snippet(String title, String channelTitle, Map<String, Thumbnail> thumbnails) {}
@@ -106,10 +109,15 @@ public class YouTubeService {
      */
     @Transactional
     public List<SongDto> getRecommendations(String seedVideoId) {
-        // Look up the seed song from cache to build a meaningful search query
+        // Prefer genre-based search; fall back to artist name
         String query = songRepository.findByYoutubeId(seedVideoId)
-                .map(s -> s.getChannelTitle() + " " + s.getTitle())
-                .orElse("top music");
+                .map(s -> {
+                    if (s.getGenre() != null && !s.getGenre().isBlank()) {
+                        return s.getGenre();
+                    }
+                    return s.getChannelTitle() + " music";
+                })
+                .orElse("trending music");
 
         log.debug("Recommendations via search for seed {}: {}", seedVideoId, query);
         return search(query);
@@ -163,7 +171,7 @@ public class YouTubeService {
             VideoResponse response = youTubeRestClient.get()
                     .uri(uriBuilder -> uriBuilder
                             .path("/videos")
-                            .queryParam("part", "snippet,contentDetails")
+                            .queryParam("part", "snippet,contentDetails,topicDetails")
                             .queryParam("id", ids)
                             .queryParam("key", apiKey)
                             .build())
@@ -178,6 +186,8 @@ public class YouTubeService {
                         ? item.contentDetails().duration() : null;
                 String thumbUrl = getThumbnailUrl(item.snippet());
 
+                String genre = extractGenre(item.topicDetails());
+
                 Song song = Song.builder()
                         .youtubeId(item.id())
                         .title(item.snippet().title())
@@ -185,6 +195,7 @@ public class YouTubeService {
                         .thumbnailUrl(thumbUrl)
                         .duration(duration)
                         .durationFormatted(formatDuration(duration))
+                        .genre(genre)
                         .build();
 
                 songRepository.save(song);
@@ -195,6 +206,20 @@ public class YouTubeService {
             log.error("YouTube videos.list failed: {}", e.getMessage());
             return List.of();
         }
+    }
+
+    /** Extracts a readable genre from YouTube topicDetails Wikipedia URLs.
+     *  e.g. "https://en.wikipedia.org/wiki/Rock_music" → "Rock music" */
+    private String extractGenre(TopicDetails topicDetails) {
+        if (topicDetails == null || topicDetails.topicCategories() == null) return null;
+        return topicDetails.topicCategories().stream()
+                .filter(url -> url != null && url.contains("wikipedia.org/wiki/"))
+                .map(url -> url.substring(url.lastIndexOf('/') + 1)
+                        .replace('_', ' ')
+                        .replace("%27", "'"))
+                .filter(g -> !g.equalsIgnoreCase("Music") && !g.equalsIgnoreCase("Musician"))
+                .findFirst()
+                .orElse(null);
     }
 
     private String getThumbnailUrl(Snippet snippet) {
@@ -225,6 +250,7 @@ public class YouTubeService {
                 .channelTitle(song.getChannelTitle())
                 .thumbnailUrl(song.getThumbnailUrl())
                 .durationFormatted(song.getDurationFormatted())
+                .genre(song.getGenre())
                 .build();
     }
 }

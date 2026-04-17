@@ -16,4 +16,5 @@ public class SongDto {
     private String channelTitle;
     private String thumbnailUrl;
     private String durationFormatted;
+    private String genre;
 }

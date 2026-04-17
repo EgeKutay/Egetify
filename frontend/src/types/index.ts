@@ -6,6 +6,7 @@ export interface Song {
   channelTitle: string;
   thumbnailUrl: string;
   durationFormatted: string;
+  genre?: string;
 }
 
 export interface Playlist {
