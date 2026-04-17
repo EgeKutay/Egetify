@@ -8,6 +8,7 @@ import { recordPlay, getStreamUrl } from "../services/musicService";
 Audio.setAudioModeAsync({
   allowsRecordingIOS: false,
   playsInSilentModeIOS: true,
+  staysActiveInBackground: true,
   shouldDuckAndroid: false,
   playThroughEarpieceAndroid: false,
 }).catch(() => {});
@@ -74,8 +75,8 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
 
       await unloadCurrent();
 
+      const localPath = FileSystem.cacheDirectory + song.youtubeId + ".m4a";
       try {
-        const localPath = FileSystem.cacheDirectory + song.youtubeId + ".m4a";
         const { exists } = await FileSystem.getInfoAsync(localPath);
 
         let audioUri: string;
@@ -84,8 +85,9 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
         } else {
           const streamUrl = await getStreamUrl(song.youtubeId);
           if (myId !== _playbackId) return;
-          await FileSystem.downloadAsync(streamUrl, localPath);
-          audioUri = localPath;
+          // Play immediately from stream URL, download in background for future plays
+          audioUri = streamUrl;
+          FileSystem.downloadAsync(streamUrl, localPath).catch(() => {});
         }
 
         const { sound } = await Audio.Sound.createAsync(
