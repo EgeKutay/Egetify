@@ -184,6 +184,13 @@ public class YouTubeService {
             for (VideoItem item : response.items()) {
                 String duration = item.contentDetails() != null
                         ? item.contentDetails().duration() : null;
+
+                // Skip videos longer than 15 minutes — protects yt-dlp / EC2
+                if (parseDurationSeconds(duration) > 900) {
+                    log.debug("Skipping long video {} ({})", item.id(), duration);
+                    continue;
+                }
+
                 String thumbUrl = getThumbnailUrl(item.snippet());
 
                 String genre = extractGenre(item.topicDetails());
@@ -228,6 +235,18 @@ public class YouTubeService {
         if (medium != null) return medium.url();
         Thumbnail def = snippet.thumbnails().get("default");
         return def != null ? def.url() : "";
+    }
+
+    /** Returns total seconds from ISO 8601 duration, or 0 if unparseable */
+    private int parseDurationSeconds(String iso) {
+        if (iso == null) return 0;
+        Pattern p = Pattern.compile("PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?");
+        Matcher m = p.matcher(iso);
+        if (!m.matches()) return 0;
+        int h   = m.group(1) != null ? Integer.parseInt(m.group(1)) : 0;
+        int min = m.group(2) != null ? Integer.parseInt(m.group(2)) : 0;
+        int sec = m.group(3) != null ? Integer.parseInt(m.group(3)) : 0;
+        return h * 3600 + min * 60 + sec;
     }
 
     /** Converts ISO 8601 duration (PT3M45S) → "3:45" */

@@ -1,6 +1,7 @@
 package com.egetify.controller;
 
 import com.egetify.dto.SongDto;
+import com.egetify.repository.SongRepository;
 import com.egetify.security.UserPrincipal;
 import com.egetify.service.InvidiousService;
 import com.egetify.service.PlayHistoryService;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Music search, recommendation and stream endpoints.
@@ -28,6 +31,7 @@ public class SearchController {
     private final YouTubeService youTubeService;
     private final PlayHistoryService playHistoryService;
     private final InvidiousService invidiousService;
+    private final SongRepository songRepository;
 
     @GetMapping("/search")
     public ResponseEntity<List<SongDto>> search(@RequestParam String q) {
@@ -55,8 +59,24 @@ public class SearchController {
 
     @GetMapping("/songs/{videoId}/stream")
     public ResponseEntity<Map<String, String>> getStreamUrl(@PathVariable String videoId) throws Exception {
+        // Reject videos over 15 minutes before spawning yt-dlp
+        songRepository.findByYoutubeId(videoId).ifPresent(song -> {
+            if (song.getDuration() != null && parseDurationSeconds(song.getDuration()) > 900) {
+                throw new IllegalArgumentException("Video exceeds maximum allowed duration of 15 minutes.");
+            }
+        });
         String url = invidiousService.getAudioStreamUrl(videoId);
         return ResponseEntity.ok(Map.of("url", url));
+    }
+
+    private int parseDurationSeconds(String iso) {
+        Pattern p = Pattern.compile("PT(?:(\\d+)H)?(?:(\\d+)M)?(?:(\\d+)S)?");
+        Matcher m = p.matcher(iso);
+        if (!m.matches()) return 0;
+        int h   = m.group(1) != null ? Integer.parseInt(m.group(1)) : 0;
+        int min = m.group(2) != null ? Integer.parseInt(m.group(2)) : 0;
+        int sec = m.group(3) != null ? Integer.parseInt(m.group(3)) : 0;
+        return h * 3600 + min * 60 + sec;
     }
 
 }
