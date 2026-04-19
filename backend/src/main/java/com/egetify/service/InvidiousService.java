@@ -161,7 +161,7 @@ public class InvidiousService {
                 "yt-dlp",
                 "--no-playlist",
                 "--proxy", proxyUrl,
-                "--cookies", System.getProperty("user.home") + "/youtube_cookies.txt",
+                "--cookies", "/home/ubuntu/youtube_cookies.txt",
                 "--extractor-args", "youtube:player_client=tv_embedded,ios",
                 "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec=aac]/bestaudio/best",
                 "--retries", "1",
