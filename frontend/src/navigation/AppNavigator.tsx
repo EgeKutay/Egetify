@@ -11,6 +11,7 @@ import SearchScreen from '../screens/SearchScreen';
 import LibraryScreen from '../screens/LibraryScreen';
 import NowPlayingScreen from '../screens/NowPlayingScreen';
 import PlaylistScreen from '../screens/PlaylistScreen';
+import CacheScreen from '../screens/CacheScreen';
 import ErrorScreen from '../screens/ErrorScreen';
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -74,6 +75,7 @@ export default function AppNavigator({ isAuthenticated }: Props) {
             options={{ presentation: 'modal' }}
           />
           <Stack.Screen name="Playlist" component={PlaylistScreen} />
+          <Stack.Screen name="Cache" component={CacheScreen} />
           <Stack.Screen name="Error" component={ErrorScreen} />
         </>
       )}

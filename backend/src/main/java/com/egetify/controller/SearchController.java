@@ -58,4 +58,5 @@ public class SearchController {
         String url = invidiousService.getAudioStreamUrl(videoId);
         return ResponseEntity.ok(Map.of("url", url));
     }
+
 }

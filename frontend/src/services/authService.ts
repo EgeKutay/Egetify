@@ -11,7 +11,7 @@ const USER_KEY  = 'user_profile';
  * Both are persisted in SecureStore so the session survives app restarts.
  */
 export async function loginWithIdToken(idToken: string): Promise<User> {
-  const response = await api.post<AuthResponse>('/auth/google', { idToken });
+  const response = await api.post<AuthResponse>('/auth/google', { idToken }, { timeout: 15000 });
   const { accessToken, user } = response.data;
 
   // Persist both token and profile — restores session on next launch

@@ -7,6 +7,8 @@ import {
   RefreshControl,
   ScrollView,
   TouchableOpacity,
+  Modal,
+  Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -17,6 +19,7 @@ import { Song, RootStackParamList } from '../types';
 import { getRecentlyPlayed, getRecommendations } from '../services/musicService';
 import { usePlayerStore } from '../store/playerStore';
 import { useAuthStore } from '../store/authStore';
+import { LinearGradient } from 'expo-linear-gradient';
 import SongCard from '../components/SongCard';
 import MiniPlayer from '../components/MiniPlayer';
 
@@ -24,7 +27,7 @@ type Nav = StackNavigationProp<RootStackParamList>;
 
 export default function HomeScreen() {
   const navigation = useNavigation<Nav>();
-  const { user } = useAuthStore();
+  const { user, logout } = useAuthStore();
   const { playSong, currentSong } = usePlayerStore();
 
   const [recentlyPlayed, setRecentlyPlayed] = useState<Song[]>([]);
@@ -32,6 +35,15 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showProfile, setShowProfile] = useState(false);
+
+  const handleLogout = () => {
+    setShowProfile(false);
+    Alert.alert('Sign out', 'Sign out of Egetify?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: logout },
+    ]);
+  };
 
   const loadData = useCallback(async () => {
     try {
@@ -92,11 +104,11 @@ export default function HomeScreen() {
             </Text>
             <Text style={styles.subtitle}>What are we listening to?</Text>
           </View>
-          <View style={styles.avatar}>
+          <TouchableOpacity style={styles.avatar} onPress={() => setShowProfile(true)}>
             <Text style={styles.avatarText}>
               {(user?.name?.[0] ?? 'E').toUpperCase()}
             </Text>
-          </View>
+          </TouchableOpacity>
         </View>
 
         {/* Recently Played */}
@@ -142,6 +154,41 @@ export default function HomeScreen() {
       {currentSong && (
         <MiniPlayer onPress={() => navigation.navigate('NowPlaying')} />
       )}
+
+      {/* Profile bottom sheet */}
+      <Modal visible={showProfile} transparent animationType="slide">
+        <TouchableOpacity style={styles.modalOverlay} onPress={() => setShowProfile(false)} activeOpacity={1}>
+          <View style={styles.modalSheet}>
+            {/* Profile header */}
+            <LinearGradient colors={[Colors.primary, Colors.primaryDark]} style={styles.profileHeader}>
+              <View style={styles.profileAvatar}>
+                <Text style={styles.profileAvatarText}>
+                  {(user?.name?.[0] ?? 'E').toUpperCase()}
+                </Text>
+              </View>
+              <Text style={styles.profileName}>{user?.name ?? ''}</Text>
+              <Text style={styles.profileEmail}>{user?.email ?? ''}</Text>
+            </LinearGradient>
+
+            {/* Options */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => { setShowProfile(false); navigation.navigate('Cache'); }}
+            >
+              <Ionicons name="folder-outline" size={22} color={Colors.textPrimary} />
+              <Text style={styles.menuText}>Cached Music</Text>
+              <Ionicons name="chevron-forward" size={18} color={Colors.iconInactive} />
+            </TouchableOpacity>
+
+            <View style={styles.divider} />
+
+            <TouchableOpacity style={styles.menuItem} onPress={handleLogout}>
+              <Ionicons name="log-out-outline" size={22} color={Colors.error} />
+              <Text style={[styles.menuText, { color: Colors.error }]}>Sign Out</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -211,4 +258,43 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   retryText: { color: '#fff', fontWeight: '700' },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    overflow: 'hidden',
+    paddingBottom: 32,
+  },
+  profileHeader: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    paddingHorizontal: 20,
+    gap: 6,
+  },
+  profileAvatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  profileAvatarText: { color: '#fff', fontWeight: '800', fontSize: 28 },
+  profileName: { color: '#fff', fontWeight: '700', fontSize: 18 },
+  profileEmail: { color: 'rgba(255,255,255,0.75)', fontSize: 13 },
+  menuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 24,
+    paddingVertical: 18,
+    gap: 14,
+  },
+  menuText: { flex: 1, fontSize: 16, color: Colors.textPrimary, fontWeight: '500' },
+  divider: { height: 1, backgroundColor: Colors.divider, marginHorizontal: 24 },
 });

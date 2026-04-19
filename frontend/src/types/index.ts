@@ -57,6 +57,7 @@ export type RootStackParamList = {
   Main: undefined;
   NowPlaying: undefined;
   Playlist: { playlistId: number };
+  Cache: undefined;
   Error: { message: string };
 };
 

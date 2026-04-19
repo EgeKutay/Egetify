@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Extracts audio stream URLs via yt-dlp routed through residential proxies.
- * EU/JP proxies listed first for lower latency. Results cached for 4 hours.
+ * EU proxies listed first for lower latency. Results cached for 4 hours.
  */
 @Slf4j
 @Service
@@ -24,14 +24,7 @@ public class InvidiousService {
     private static final List<String> PROXIES = List.of(
             "31.58.9.4:6077",         // DE, Frankfurt
             "31.59.20.176:6754",      // GB, London
-            "45.38.107.97:6014",      // GB, London
-            "198.105.121.200:6462",   // GB, City of London
-            "142.111.67.146:5611",    // JP, Tokyo
-            "216.10.27.159:6837",     // US, Dallas
-            "191.96.254.138:6185",    // US, Los Angeles
-            "198.23.239.134:6540",    // US, Buffalo
-            "107.172.163.27:6543",    // US, Bloomingdale
-            "23.26.71.145:5628"       // US, Orem
+            "198.23.239.134:6540"     // US, Buffalo
     );
 
     private static final long CACHE_TTL_MS = 4 * 60 * 60 * 1000L;
@@ -56,7 +49,7 @@ public class InvidiousService {
                     return url;
                 }
             } catch (Exception e) {
-                log.warn("Proxy {} failed for videoId {}: {}", proxy, videoId, e.getMessage());
+                log.warn("Proxy {} failed for {}: {}", proxy, videoId, e.getMessage());
             }
         }
         throw new RuntimeException("All proxies failed for videoId: " + videoId);
@@ -70,7 +63,7 @@ public class InvidiousService {
                 "--no-playlist",
                 "--proxy", proxyUrl,
                 "-f", "bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio/best",
-                "--retries", "2",
+                "--retries", "1",
                 "-g",
                 "https://www.youtube.com/watch?v=" + videoId
         );
@@ -92,7 +85,7 @@ public class InvidiousService {
                     .reduce("", (a, b) -> a + "\n" + b);
         }
 
-        boolean finished = process.waitFor(45, TimeUnit.SECONDS);
+        boolean finished = process.waitFor(15, TimeUnit.SECONDS);
         if (!finished) {
             process.destroyForcibly();
             throw new RuntimeException("yt-dlp timed out for videoId: " + videoId);

@@ -39,6 +39,21 @@ const initialState: PlayerState = {
   durationMs: 0,
 };
 
+export const METADATA_PATH = FileSystem.cacheDirectory + "_metadata.json";
+
+async function saveSongMetadata(song: Song) {
+  try {
+    let metadata: Record<string, { title: string; channelTitle: string }> = {};
+    const { exists } = await FileSystem.getInfoAsync(METADATA_PATH);
+    if (exists) {
+      const raw = await FileSystem.readAsStringAsync(METADATA_PATH);
+      metadata = JSON.parse(raw);
+    }
+    metadata[song.youtubeId] = { title: song.title, channelTitle: song.channelTitle };
+    await FileSystem.writeAsStringAsync(METADATA_PATH, JSON.stringify(metadata));
+  } catch {}
+}
+
 // Sound instance lives outside the store so Zustand doesn't serialize it
 let _sound: Audio.Sound | null = null;
 let _playbackId = 0;
@@ -87,7 +102,9 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
           if (myId !== _playbackId) return;
           // Play immediately from stream URL, download in background for future plays
           audioUri = streamUrl;
-          FileSystem.downloadAsync(streamUrl, localPath).catch(() => {});
+          FileSystem.downloadAsync(streamUrl, localPath)
+            .then(() => saveSongMetadata(song))
+            .catch(() => {});
         }
 
         const { sound } = await Audio.Sound.createAsync(
@@ -114,6 +131,8 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
         _sound = sound;
         set({ isLoading: false, isPlaying: true });
       } catch (e) {
+        // Delete the cached file so next tap forces a fresh download
+        await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});
         if (myId === _playbackId) {
           set({ isLoading: false, isPlaying: false });
           throw e;
