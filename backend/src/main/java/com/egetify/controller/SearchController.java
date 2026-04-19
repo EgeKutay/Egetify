@@ -17,7 +17,6 @@ import org.springframework.web.bind.annotation.*;
 
 import java.io.InputStream;
 import java.net.HttpURLConnection;
-import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -92,17 +91,8 @@ public class SearchController {
             return;
         }
 
-        String cdnUrl = invidiousService.getAudioStreamUrl(videoId).get(60, TimeUnit.SECONDS);
-
-        HttpURLConnection conn = (HttpURLConnection) new URL(cdnUrl).openConnection();
-        conn.setRequestProperty("User-Agent", "Mozilla/5.0");
-        conn.setRequestProperty("Accept", "*/*");
-
-        // Forward Range header for seeking support
         String range = request.getHeader("Range");
-        if (StringUtils.hasText(range)) conn.setRequestProperty("Range", range);
-
-        conn.connect();
+        HttpURLConnection conn = invidiousService.openConnection(videoId, range);
 
         int status = conn.getResponseCode();
         response.setStatus(status);
