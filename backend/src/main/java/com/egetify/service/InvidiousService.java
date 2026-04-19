@@ -110,25 +110,33 @@ public class InvidiousService {
     public HttpURLConnection openConnection(String videoId, String rangeHeader) throws Exception {
         CacheEntry entry = resolveEntry(videoId).get(60, TimeUnit.SECONDS);
 
-        String[] parts = entry.proxy().split(":");
-        String proxyHost = parts[0];
-        int proxyPort = Integer.parseInt(parts[1]);
+        HttpURLConnection conn;
+        if (entry.proxy() == null) {
+            // CDN URL is locked to EC2's IP — connect directly
+            System.clearProperty("https.proxyHost");
+            System.clearProperty("https.proxyPort");
+            conn = (HttpURLConnection) new URL(entry.url()).openConnection();
+        } else {
+            String[] parts = entry.proxy().split(":");
+            String proxyHost = parts[0];
+            int proxyPort = Integer.parseInt(parts[1]);
 
-        // Java requires system properties for authenticated HTTPS proxy tunneling
-        System.setProperty("https.proxyHost", proxyHost);
-        System.setProperty("https.proxyPort", String.valueOf(proxyPort));
-        System.setProperty("https.proxyUser", PROXY_USER);
-        System.setProperty("https.proxyPassword", PROXY_PASS);
-        System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
+            System.setProperty("https.proxyHost", proxyHost);
+            System.setProperty("https.proxyPort", String.valueOf(proxyPort));
+            System.setProperty("https.proxyUser", PROXY_USER);
+            System.setProperty("https.proxyPassword", PROXY_PASS);
+            System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
 
-        Authenticator.setDefault(new Authenticator() {
-            @Override
-            protected PasswordAuthentication getPasswordAuthentication() {
-                return new PasswordAuthentication(PROXY_USER, PROXY_PASS.toCharArray());
-            }
-        });
+            Authenticator.setDefault(new Authenticator() {
+                @Override
+                protected PasswordAuthentication getPasswordAuthentication() {
+                    return new PasswordAuthentication(PROXY_USER, PROXY_PASS.toCharArray());
+                }
+            });
 
-        HttpURLConnection conn = (HttpURLConnection) new URL(entry.url()).openConnection();
+            conn = (HttpURLConnection) new URL(entry.url()).openConnection();
+        }
+
         conn.setRequestProperty("User-Agent", "Mozilla/5.0");
         conn.setRequestProperty("Accept", "*/*");
         if (rangeHeader != null && !rangeHeader.isBlank()) conn.setRequestProperty("Range", rangeHeader);
@@ -138,6 +146,18 @@ public class InvidiousService {
 
     private CacheEntry extractWithProxies(String videoId) throws Exception {
         log.info("Extracting stream URL for videoId: {}", videoId);
+
+        // Try direct (no proxy) first — cookies authenticate the request, CDN URL locks to EC2 IP
+        try {
+            String url = extractDirect(videoId);
+            if (url != null && !url.isBlank()) {
+                log.info("Stream URL extracted directly for videoId: {}", videoId);
+                return new CacheEntry(url, null, System.currentTimeMillis() + CACHE_TTL_MS);
+            }
+        } catch (Exception e) {
+            log.warn("Direct extraction failed for {}: {}", videoId, e.getMessage());
+        }
+
         Exception last = null;
         for (String proxy : PROXIES) {
             try {
@@ -151,7 +171,21 @@ public class InvidiousService {
                 last = e;
             }
         }
-        throw last != null ? last : new RuntimeException("All proxies failed for videoId: " + videoId);
+        throw last != null ? last : new RuntimeException("All extraction attempts failed for videoId: " + videoId);
+    }
+
+    private String extractDirect(String videoId) throws Exception {
+        ProcessBuilder pb = new ProcessBuilder(
+                "yt-dlp",
+                "--no-playlist",
+                "--cookies", "/home/ubuntu/youtube_cookies.txt",
+                "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec=aac]/bestaudio/best",
+                "--retries", "1",
+                "-g",
+                "https://www.youtube.com/watch?v=" + videoId
+        );
+        pb.redirectErrorStream(false);
+        return runYtDlp(pb, videoId);
     }
 
     private String extractWithProxy(String videoId, String proxyHost) throws Exception {
@@ -162,14 +196,17 @@ public class InvidiousService {
                 "--no-playlist",
                 "--proxy", proxyUrl,
                 "--cookies", "/home/ubuntu/youtube_cookies.txt",
-                "--extractor-args", "youtube:player_client=tv_embedded,ios",
+                "--extractor-args", "youtube:player_client=tv_embedded",
                 "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec=aac]/bestaudio/best",
                 "--retries", "1",
                 "-g",
                 "https://www.youtube.com/watch?v=" + videoId
         );
         pb.redirectErrorStream(false);
+        return runYtDlp(pb, videoId);
+    }
 
+    private String runYtDlp(ProcessBuilder pb, String videoId) throws Exception {
         Process process = pb.start();
 
         String url;
