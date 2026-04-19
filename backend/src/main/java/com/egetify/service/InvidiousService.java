@@ -7,7 +7,11 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Extracts audio stream URLs via yt-dlp routed through residential proxies.
@@ -38,25 +42,23 @@ public class InvidiousService {
     /** Max 2 concurrent yt-dlp processes so EC2 doesn't run out of memory/CPU */
     private final ExecutorService ytdlpExecutor = Executors.newFixedThreadPool(2);
 
-    public String getAudioStreamUrl(String videoId) throws Exception {
+    /** Returns a future that completes with the stream URL — never blocks the caller's thread. */
+    public CompletableFuture<String> getAudioStreamUrl(String videoId) {
         CacheEntry cached = cache.get(videoId);
         if (cached != null && System.currentTimeMillis() < cached.expiresAt()) {
             log.debug("Cache hit for videoId: {}", videoId);
-            return cached.url();
+            return CompletableFuture.completedFuture(cached.url());
         }
 
-        // Deduplicate: if another request is already extracting this videoId, share its future
         CompletableFuture<String> existing = inFlight.get(videoId);
         if (existing != null) {
             log.debug("Joining in-flight extraction for videoId: {}", videoId);
-            return existing.get(60, TimeUnit.SECONDS);
+            return existing;
         }
 
         CompletableFuture<String> future = new CompletableFuture<>();
         CompletableFuture<String> previous = inFlight.putIfAbsent(videoId, future);
-        if (previous != null) {
-            return previous.get(60, TimeUnit.SECONDS);
-        }
+        if (previous != null) return previous;
 
         ytdlpExecutor.submit(() -> {
             try {
@@ -70,12 +72,7 @@ public class InvidiousService {
             }
         });
 
-        try {
-            return future.get(60, TimeUnit.SECONDS);
-        } catch (ExecutionException e) {
-            Throwable cause = e.getCause();
-            throw cause instanceof Exception ? (Exception) cause : new RuntimeException(cause);
-        }
+        return future;
     }
 
     private String extractWithProxies(String videoId) throws Exception {
