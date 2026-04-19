@@ -31,7 +31,7 @@ public class InvidiousService {
             "198.23.239.134:6540"
     );
 
-    private static final long CACHE_TTL_MS = 4 * 60 * 60 * 1000L;
+    private static final long CACHE_TTL_MS = 90 * 60 * 1000L; // 90 minutes — YouTube CDN URLs expire ~6h but refresh earlier to be safe
 
     private record CacheEntry(String url, long expiresAt) {}
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();

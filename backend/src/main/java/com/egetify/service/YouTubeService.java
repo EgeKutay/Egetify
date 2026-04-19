@@ -96,7 +96,10 @@ public class YouTubeService {
                     .map(item -> item.id().videoId())
                     .toList();
 
-            return fetchAndCacheDetails(videoIds);
+            return fetchAndCacheDetails(videoIds).stream()
+                    .filter(s -> parseDurationSeconds(songRepository.findByYoutubeId(s.getYoutubeId())
+                            .map(Song::getDuration).orElse(null)) <= 900)
+                    .toList();
         } catch (Exception e) {
             log.error("YouTube search failed: {}", e.getMessage());
             throw new RuntimeException("YouTube search failed: " + e.getMessage());
