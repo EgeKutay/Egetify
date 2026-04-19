@@ -114,8 +114,12 @@ public class InvidiousService {
         String proxyHost = parts[0];
         int proxyPort = Integer.parseInt(parts[1]);
 
-        Proxy proxy = new Proxy(Proxy.Type.HTTP, new InetSocketAddress(proxyHost, proxyPort));
-        HttpURLConnection conn = (HttpURLConnection) new URL(entry.url()).openConnection(proxy);
+        // Java requires system properties for authenticated HTTPS proxy tunneling
+        System.setProperty("https.proxyHost", proxyHost);
+        System.setProperty("https.proxyPort", String.valueOf(proxyPort));
+        System.setProperty("https.proxyUser", PROXY_USER);
+        System.setProperty("https.proxyPassword", PROXY_PASS);
+        System.setProperty("jdk.http.auth.tunneling.disabledSchemes", "");
 
         Authenticator.setDefault(new Authenticator() {
             @Override
@@ -124,6 +128,7 @@ public class InvidiousService {
             }
         });
 
+        HttpURLConnection conn = (HttpURLConnection) new URL(entry.url()).openConnection();
         conn.setRequestProperty("User-Agent", "Mozilla/5.0");
         conn.setRequestProperty("Accept", "*/*");
         if (rangeHeader != null && !rangeHeader.isBlank()) conn.setRequestProperty("Range", rangeHeader);
