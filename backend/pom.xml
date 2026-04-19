@@ -74,11 +74,11 @@
             <scope>runtime</scope>
         </dependency>
 
-        <!-- Google API Client (for verifying Google ID tokens) -->
+        <!-- Firebase Admin SDK (for verifying Firebase ID tokens) -->
         <dependency>
-            <groupId>com.google.api-client</groupId>
-            <artifactId>google-api-client</artifactId>
-            <version>2.3.0</version>
+            <groupId>com.google.firebase</groupId>
+            <artifactId>firebase-admin</artifactId>
+            <version>9.3.0</version>
         </dependency>
 
         <!-- Lombok -->

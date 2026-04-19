@@ -6,67 +6,32 @@ import com.egetify.dto.UserDto;
 import com.egetify.model.User;
 import com.egetify.repository.UserRepository;
 import com.egetify.security.JwtTokenProvider;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdToken;
-import com.google.api.client.googleapis.auth.oauth2.GoogleIdTokenVerifier;
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
-import com.google.api.client.json.gson.GsonFactory;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseAuthException;
+import com.google.firebase.auth.FirebaseToken;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.Collectors;
-
-/**
- * Handles Google Sign-In token verification and JWT issuance.
- *
- * Flow:
- *   1. Frontend obtains a Google ID token via Google Sign-In SDK.
- *   2. Frontend sends the token to POST /api/auth/google.
- *   3. This service verifies it with Google's servers.
- *   4. Creates or fetches the user in our DB.
- *   5. Returns our own JWT so the frontend can authenticate future requests.
- */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class AuthService {
 
     private final UserRepository userRepository;
     private final JwtTokenProvider tokenProvider;
-    private final GoogleIdTokenVerifier googleVerifier;
-
-    public AuthService(UserRepository userRepository,
-                       JwtTokenProvider tokenProvider,
-                       @Value("${app.google.client-id}") String googleClientIds) throws Exception {
-        this.userRepository = userRepository;
-        this.tokenProvider = tokenProvider;
-        List<String> audiences = Arrays.stream(googleClientIds.split(","))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toList());
-        if (audiences.isEmpty()) {
-            throw new IllegalArgumentException("app.google.client-id must contain at least one Google OAuth client ID");
-        }
-        this.googleVerifier = new GoogleIdTokenVerifier.Builder(
-                GoogleNetHttpTransport.newTrustedTransport(),
-                GsonFactory.getDefaultInstance())
-                .setAudience(audiences)
-                .build();
-    }
 
     @Transactional
     public AuthResponse loginWithGoogle(GoogleAuthRequest request) {
-        GoogleIdToken.Payload payload = verifyGoogleToken(request.getIdToken());
+        FirebaseToken decoded = verifyFirebaseToken(request.getIdToken());
 
-        String googleId  = payload.getSubject();
-        String email     = payload.getEmail();
-        String name      = (String) payload.get("name");
-        String pictureUrl = (String) payload.get("picture");
+        String firebaseUid = decoded.getUid();
+        String email       = decoded.getEmail();
+        String name        = decoded.getName();
+        String pictureUrl  = decoded.getPicture();
 
-        // Upsert: create user on first login, update profile on subsequent logins
-        User user = userRepository.findByGoogleId(googleId)
+        User user = userRepository.findByGoogleId(firebaseUid)
                 .map(existing -> {
                     existing.setName(name);
                     existing.setEmail(email);
@@ -75,7 +40,7 @@ public class AuthService {
                 })
                 .orElseGet(() -> userRepository.save(
                         User.builder()
-                            .googleId(googleId)
+                            .googleId(firebaseUid)
                             .email(email)
                             .name(name)
                             .pictureUrl(pictureUrl)
@@ -96,16 +61,12 @@ public class AuthService {
                 .build();
     }
 
-    private GoogleIdToken.Payload verifyGoogleToken(String idTokenString) {
+    private FirebaseToken verifyFirebaseToken(String idTokenString) {
         try {
-            GoogleIdToken idToken = googleVerifier.verify(idTokenString);
-            if (idToken == null) {
-                throw new IllegalArgumentException("Invalid Google ID token");
-            }
-            return idToken.getPayload();
-        } catch (Exception e) {
-            log.error("Google token verification failed: {}", e.getMessage());
-            throw new IllegalArgumentException("Google token verification failed: " + e.getMessage());
+            return FirebaseAuth.getInstance().verifyIdToken(idTokenString);
+        } catch (FirebaseAuthException e) {
+            log.error("Firebase token verification failed: {}", e.getMessage());
+            throw new IllegalArgumentException("Firebase token verification failed: " + e.getMessage());
         }
     }
 }

@@ -7,12 +7,12 @@ import java.io.BufferedReader;
 import java.io.InputStreamReader;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Extracts audio stream URLs via yt-dlp routed through residential proxies.
- * EU proxies listed first for lower latency. Results cached for 4 hours.
+ * Runs on a dedicated 2-thread pool so yt-dlp never blocks Tomcat's request threads.
+ * Deduplicates concurrent requests for the same videoId (one yt-dlp call shared).
  */
 @Slf4j
 @Service
@@ -22,9 +22,9 @@ public class InvidiousService {
     private static final String PROXY_PASS = "w6k0edt4fzfi";
 
     private static final List<String> PROXIES = List.of(
-            "31.58.9.4:6077",         // DE, Frankfurt
-            "31.59.20.176:6754",      // GB, London
-            "198.23.239.134:6540"     // US, Buffalo
+            "31.58.9.4:6077",
+            "31.59.20.176:6754",
+            "198.23.239.134:6540"
     );
 
     private static final long CACHE_TTL_MS = 4 * 60 * 60 * 1000L;
@@ -32,27 +32,68 @@ public class InvidiousService {
     private record CacheEntry(String url, long expiresAt) {}
     private final Map<String, CacheEntry> cache = new ConcurrentHashMap<>();
 
-    public String getAudioStreamUrl(String videoId) {
+    /** In-flight requests: videoId → future being resolved by yt-dlp */
+    private final Map<String, CompletableFuture<String>> inFlight = new ConcurrentHashMap<>();
+
+    /** Max 2 concurrent yt-dlp processes so EC2 doesn't run out of memory/CPU */
+    private final ExecutorService ytdlpExecutor = Executors.newFixedThreadPool(2);
+
+    public String getAudioStreamUrl(String videoId) throws Exception {
         CacheEntry cached = cache.get(videoId);
         if (cached != null && System.currentTimeMillis() < cached.expiresAt()) {
             log.debug("Cache hit for videoId: {}", videoId);
             return cached.url();
         }
 
+        // Deduplicate: if another request is already extracting this videoId, share its future
+        CompletableFuture<String> existing = inFlight.get(videoId);
+        if (existing != null) {
+            log.debug("Joining in-flight extraction for videoId: {}", videoId);
+            return existing.get(60, TimeUnit.SECONDS);
+        }
+
+        CompletableFuture<String> future = new CompletableFuture<>();
+        CompletableFuture<String> previous = inFlight.putIfAbsent(videoId, future);
+        if (previous != null) {
+            return previous.get(60, TimeUnit.SECONDS);
+        }
+
+        ytdlpExecutor.submit(() -> {
+            try {
+                String url = extractWithProxies(videoId);
+                cache.put(videoId, new CacheEntry(url, System.currentTimeMillis() + CACHE_TTL_MS));
+                future.complete(url);
+            } catch (Exception e) {
+                future.completeExceptionally(e);
+            } finally {
+                inFlight.remove(videoId);
+            }
+        });
+
+        try {
+            return future.get(60, TimeUnit.SECONDS);
+        } catch (ExecutionException e) {
+            Throwable cause = e.getCause();
+            throw cause instanceof Exception ? (Exception) cause : new RuntimeException(cause);
+        }
+    }
+
+    private String extractWithProxies(String videoId) throws Exception {
         log.info("Extracting stream URL for videoId: {}", videoId);
+        Exception last = null;
         for (String proxy : PROXIES) {
             try {
                 String url = extractWithProxy(videoId, proxy);
                 if (url != null && !url.isBlank()) {
-                    cache.put(videoId, new CacheEntry(url, System.currentTimeMillis() + CACHE_TTL_MS));
                     log.info("Stream URL extracted via {} for videoId: {}", proxy, videoId);
                     return url;
                 }
             } catch (Exception e) {
                 log.warn("Proxy {} failed for {}: {}", proxy, videoId, e.getMessage());
+                last = e;
             }
         }
-        throw new RuntimeException("All proxies failed for videoId: " + videoId);
+        throw last != null ? last : new RuntimeException("All proxies failed for videoId: " + videoId);
     }
 
     private String extractWithProxy(String videoId, String proxyHost) throws Exception {
@@ -72,14 +113,12 @@ public class InvidiousService {
         Process process = pb.start();
 
         String url;
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getInputStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             url = reader.readLine();
         }
 
         String stderr;
-        try (BufferedReader reader = new BufferedReader(
-                new InputStreamReader(process.getErrorStream()))) {
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getErrorStream()))) {
             stderr = reader.lines()
                     .filter(l -> l != null && !l.isBlank())
                     .reduce("", (a, b) -> a + "\n" + b);

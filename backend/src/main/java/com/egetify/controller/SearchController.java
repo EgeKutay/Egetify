@@ -54,7 +54,7 @@ public class SearchController {
     }
 
     @GetMapping("/songs/{videoId}/stream")
-    public ResponseEntity<Map<String, String>> getStreamUrl(@PathVariable String videoId) {
+    public ResponseEntity<Map<String, String>> getStreamUrl(@PathVariable String videoId) throws Exception {
         String url = invidiousService.getAudioStreamUrl(videoId);
         return ResponseEntity.ok(Map.of("url", url));
     }
