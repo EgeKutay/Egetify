@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { User } from '../types';
 import { loginWithIdToken, signOut, restoreSession } from '../services/authService';
+import { usePlayerStore } from './playerStore';
 
 interface AuthState {
   user: User | null;
@@ -34,6 +35,7 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   logout: async () => {
     await signOut();
+    await usePlayerStore.getState().clearPlayer();
     set({ user: null, isAuthenticated: false });
   },
 

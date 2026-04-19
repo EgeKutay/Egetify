@@ -13,7 +13,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -59,15 +59,14 @@ public class SearchController {
     }
 
     @GetMapping("/songs/{videoId}/stream")
-    public CompletableFuture<ResponseEntity<Map<String, String>>> getStreamUrl(@PathVariable String videoId) {
-        // Reject videos over 15 minutes before spawning yt-dlp
+    public ResponseEntity<Map<String, String>> getStreamUrl(@PathVariable String videoId) throws Exception {
         songRepository.findByYoutubeId(videoId).ifPresent(song -> {
             if (song.getDuration() != null && parseDurationSeconds(song.getDuration()) > 900) {
                 throw new IllegalArgumentException("Video exceeds maximum allowed duration of 15 minutes.");
             }
         });
-        return invidiousService.getAudioStreamUrl(videoId)
-                .thenApply(url -> ResponseEntity.ok(Map.of("url", url)));
+        String url = invidiousService.getAudioStreamUrl(videoId).get(60, TimeUnit.SECONDS);
+        return ResponseEntity.ok(Map.of("url", url));
     }
 
     private int parseDurationSeconds(String iso) {

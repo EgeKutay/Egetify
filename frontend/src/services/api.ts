@@ -22,12 +22,16 @@ api.interceptors.request.use(async (config) => {
   return config;
 });
 
-/** On 401/403 wipe token and the caller handles redirect to Login */
+/** On 401/403 wipe session so AppNavigator redirects to Login */
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
     if (error.response?.status === 401 || error.response?.status === 403) {
       await SecureStore.deleteItemAsync('access_token');
+      await SecureStore.deleteItemAsync('user_profile');
+      // Lazily import to avoid circular deps
+      const { useAuthStore } = await import('../store/authStore');
+      useAuthStore.setState({ user: null, isAuthenticated: false });
     }
     return Promise.reject(error);
   },
