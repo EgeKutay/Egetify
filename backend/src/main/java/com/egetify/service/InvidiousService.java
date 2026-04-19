@@ -161,7 +161,8 @@ public class InvidiousService {
                 "yt-dlp",
                 "--no-playlist",
                 "--proxy", proxyUrl,
-                "-f", "bestaudio[ext=m4a]/bestaudio[acodec=aac]/bestaudio/best",
+                "--extractor-args", "youtube:player_client=ios",
+                "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec=aac]/bestaudio/best",
                 "--retries", "1",
                 "-g",
                 "https://www.youtube.com/watch?v=" + videoId

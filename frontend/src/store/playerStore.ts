@@ -94,7 +94,7 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
 
       await unloadCurrent();
 
-      const localPath = FileSystem.cacheDirectory + song.youtubeId + ".m4a";
+      const localPath = FileSystem.cacheDirectory + song.youtubeId + ".audio";
       try {
         const { exists } = await FileSystem.getInfoAsync(localPath);
 
