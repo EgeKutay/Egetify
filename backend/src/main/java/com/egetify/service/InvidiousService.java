@@ -26,9 +26,11 @@ public class InvidiousService {
     private static final String PROXY_PASS = "w6k0edt4fzfi";
 
     private static final List<String> PROXIES = List.of(
-            "31.58.9.4:6077",
-            "31.59.20.176:6754",
-            "198.23.239.134:6540"
+            "31.59.20.176:6754",   // GB, London
+            "198.23.239.134:6540", // US, Buffalo
+            "45.38.107.97:6014",   // GB, London
+            "107.172.163.27:6543", // US, Bloomingdale
+            "216.10.27.159:6837"   // US, Dallas
     );
 
     private static final long CACHE_TTL_MS = 90 * 60 * 1000L; // 90 minutes — YouTube CDN URLs expire ~6h but refresh earlier to be safe

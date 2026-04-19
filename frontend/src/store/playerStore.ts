@@ -1,8 +1,12 @@
 import { create } from "zustand";
 import { Audio, AVPlaybackStatus } from "expo-av";
 import * as FileSystem from "expo-file-system";
+import * as SecureStore from "expo-secure-store";
 import { Song, Playlist, RepeatMode, PlayerState } from "../types";
-import { recordPlay, getStreamUrl } from "../services/musicService";
+import { recordPlay } from "../services/musicService";
+
+declare const process: { env: Record<string, string | undefined> };
+const API_BASE = (process.env.EXPO_PUBLIC_API_BASE_URL ?? "http://10.0.2.2:8080/api").replace(/\/$/, "");
 
 // Enable background audio + lock-screen controls once at module load
 Audio.setAudioModeAsync({
@@ -98,11 +102,12 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
         if (exists) {
           audioUri = localPath;
         } else {
-          const streamUrl = await getStreamUrl(song.youtubeId);
+          const token = await SecureStore.getItemAsync("access_token");
+          const proxyUrl = `${API_BASE}/songs/${song.youtubeId}/audio?token=${token ?? ""}`;
           if (myId !== _playbackId) return;
-          // Play immediately from stream URL, download in background for future plays
-          audioUri = streamUrl;
-          FileSystem.downloadAsync(streamUrl, localPath)
+          audioUri = proxyUrl;
+          // Cache in background for future plays
+          FileSystem.downloadAsync(proxyUrl, localPath)
             .then(() => saveSongMetadata(song))
             .catch(() => {});
         }
