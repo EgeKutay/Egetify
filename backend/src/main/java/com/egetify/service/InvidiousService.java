@@ -174,8 +174,15 @@ public class InvidiousService {
         throw last != null ? last : new RuntimeException("All extraction attempts failed for videoId: " + videoId);
     }
 
+    private ProcessBuilder buildYtDlpProcess(List<String> args) {
+        ProcessBuilder pb = new ProcessBuilder(args);
+        pb.environment().put("PATH", "/usr/local/bin:/usr/bin:/bin:" + pb.environment().getOrDefault("PATH", ""));
+        pb.redirectErrorStream(false);
+        return pb;
+    }
+
     private String extractDirect(String videoId) throws Exception {
-        ProcessBuilder pb = new ProcessBuilder(
+        ProcessBuilder pb = buildYtDlpProcess(List.of(
                 "yt-dlp",
                 "--no-playlist",
                 "--cookies", "/home/ubuntu/youtube_cookies.txt",
@@ -183,26 +190,23 @@ public class InvidiousService {
                 "--retries", "1",
                 "-g",
                 "https://www.youtube.com/watch?v=" + videoId
-        );
-        pb.redirectErrorStream(false);
+        ));
         return runYtDlp(pb, videoId);
     }
 
     private String extractWithProxy(String videoId, String proxyHost) throws Exception {
         String proxyUrl = "http://" + PROXY_USER + ":" + PROXY_PASS + "@" + proxyHost;
 
-        ProcessBuilder pb = new ProcessBuilder(
+        ProcessBuilder pb = buildYtDlpProcess(List.of(
                 "yt-dlp",
                 "--no-playlist",
                 "--proxy", proxyUrl,
                 "--cookies", "/home/ubuntu/youtube_cookies.txt",
-                "--extractor-args", "youtube:player_client=tv_embedded",
                 "-f", "bestaudio[ext=m4a]/bestaudio[ext=webm]/bestaudio[acodec=aac]/bestaudio/best",
                 "--retries", "1",
                 "-g",
                 "https://www.youtube.com/watch?v=" + videoId
-        );
-        pb.redirectErrorStream(false);
+        ));
         return runYtDlp(pb, videoId);
     }
 
