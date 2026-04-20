@@ -68,7 +68,7 @@ public class SearchController {
     @GetMapping("/songs/{videoId}/stream")
     public ResponseEntity<Map<String, String>> getStreamUrl(@PathVariable String videoId) throws Exception {
         songRepository.findByYoutubeId(videoId).ifPresent(song -> {
-            if (song.getDuration() != null && parseDurationSeconds(song.getDuration()) > 900) {
+            if (song.getDuration() != null && parseDurationSeconds(song.getDuration()) > 1200) {
                 throw new IllegalArgumentException("Video exceeds maximum allowed duration of 15 minutes.");
             }
         });

@@ -83,6 +83,7 @@ public class YouTubeService {
                             .queryParam("q", query)
                             .queryParam("type", "video")
                             .queryParam("videoCategoryId", "10")   // Music
+                            .queryParam("videoDuration", "medium") // 4–20 min, excludes long mixes
                             .queryParam("maxResults", maxResults)
                             .queryParam("key", apiKey)
                             .build())
@@ -98,7 +99,7 @@ public class YouTubeService {
 
             return fetchAndCacheDetails(videoIds).stream()
                     .filter(s -> parseDurationSeconds(songRepository.findByYoutubeId(s.getYoutubeId())
-                            .map(Song::getDuration).orElse(null)) <= 900)
+                            .map(Song::getDuration).orElse(null)) <= 1200)
                     .toList();
         } catch (Exception e) {
             log.error("YouTube search failed: {}", e.getMessage());
@@ -189,7 +190,7 @@ public class YouTubeService {
                         ? item.contentDetails().duration() : null;
 
                 // Skip videos longer than 15 minutes — protects yt-dlp / EC2
-                if (parseDurationSeconds(duration) > 900) {
+                if (parseDurationSeconds(duration) > 1200) {
                     log.debug("Skipping long video {} ({})", item.id(), duration);
                     continue;
                 }
