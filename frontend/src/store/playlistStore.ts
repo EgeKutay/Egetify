@@ -1,6 +1,26 @@
 import { create } from 'zustand';
+import * as FileSystem from 'expo-file-system';
 import { Playlist } from '../types';
 import * as playlistService from '../services/playlistService';
+
+const PLAYLISTS_CACHE = FileSystem.documentDirectory + '_playlists.json';
+
+async function savePlaylistsLocally(playlists: Playlist[]) {
+  try {
+    await FileSystem.writeAsStringAsync(PLAYLISTS_CACHE, JSON.stringify(playlists));
+  } catch {}
+}
+
+async function loadPlaylistsLocally(): Promise<Playlist[] | null> {
+  try {
+    const { exists } = await FileSystem.getInfoAsync(PLAYLISTS_CACHE);
+    if (!exists) return null;
+    const raw = await FileSystem.readAsStringAsync(PLAYLISTS_CACHE);
+    return JSON.parse(raw) as Playlist[];
+  } catch {
+    return null;
+  }
+}
 
 interface PlaylistStore {
   playlists: Playlist[];
@@ -25,34 +45,44 @@ export const usePlaylistStore = create<PlaylistStore>((set, get) => ({
     try {
       const playlists = await playlistService.getPlaylists();
       set({ playlists, isLoading: false });
-    } catch (err: any) {
-      set({ error: err.message, isLoading: false });
+      savePlaylistsLocally(playlists);
+    } catch {
+      const cached = await loadPlaylistsLocally();
+      if (cached) {
+        set({ playlists: cached, isLoading: false });
+      } else {
+        set({ error: 'No internet connection and no cached data', isLoading: false });
+      }
     }
   },
 
   createPlaylist: async (name, description) => {
     const created = await playlistService.createPlaylist(name, description);
-    set((state) => ({ playlists: [created, ...state.playlists] }));
+    const next = [created, ...get().playlists];
+    set({ playlists: next });
+    savePlaylistsLocally(next);
     return created;
   },
 
   deletePlaylist: async (id) => {
     await playlistService.deletePlaylist(id);
-    set((state) => ({ playlists: state.playlists.filter((p) => p.id !== id) }));
+    const next = get().playlists.filter((p) => p.id !== id);
+    set({ playlists: next });
+    savePlaylistsLocally(next);
   },
 
   addSong: async (playlistId, youtubeId) => {
     const updated = await playlistService.addSongToPlaylist(playlistId, youtubeId);
-    set((state) => ({
-      playlists: state.playlists.map((p) => (p.id === playlistId ? updated : p)),
-    }));
+    const next = get().playlists.map((p) => (p.id === playlistId ? updated : p));
+    set({ playlists: next });
+    savePlaylistsLocally(next);
   },
 
   removeSong: async (playlistId, youtubeId) => {
     const updated = await playlistService.removeSongFromPlaylist(playlistId, youtubeId);
-    set((state) => ({
-      playlists: state.playlists.map((p) => (p.id === playlistId ? updated : p)),
-    }));
+    const next = get().playlists.map((p) => (p.id === playlistId ? updated : p));
+    set({ playlists: next });
+    savePlaylistsLocally(next);
   },
 
   clearError: () => set({ error: null }),

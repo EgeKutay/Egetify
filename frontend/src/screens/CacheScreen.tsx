@@ -46,11 +46,11 @@ export default function CacheScreen() {
 
       const dir = FileSystem.cacheDirectory!;
       const files = await FileSystem.readDirectoryAsync(dir);
-      const audioFiles = files.filter(f => f.endsWith('.m4a'));
+      const audioFiles = files.filter(f => f.endsWith('.audio'));
 
       const entries: CachedSong[] = [];
       for (const file of audioFiles) {
-        const youtubeId = file.replace('.m4a', '');
+        const youtubeId = file.replace('.audio', '');
         const path = dir + file;
         const info = await FileSystem.getInfoAsync(path, { size: true });
         const sizeBytes = (info as any).size ?? 0;

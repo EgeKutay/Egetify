@@ -61,8 +61,13 @@ async function saveSongMetadata(song: Song) {
 // Sound instance lives outside the store so Zustand doesn't serialize it
 let _sound: Audio.Sound | null = null;
 let _playbackId = 0;
+let _cacheTimer: ReturnType<typeof setTimeout> | null = null;
 
 async function unloadCurrent() {
+  if (_cacheTimer) {
+    clearTimeout(_cacheTimer);
+    _cacheTimer = null;
+  }
   if (_sound) {
     try {
       await _sound.unloadAsync();
@@ -106,16 +111,21 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
           const proxyUrl = `${API_BASE}/songs/${song.youtubeId}/audio?token=${token ?? ""}`;
           if (myId !== _playbackId) return;
           audioUri = proxyUrl;
-          // Cache in background for future plays
-          FileSystem.downloadAsync(proxyUrl, localPath)
-            .then(() => saveSongMetadata(song))
-            .catch(() => {});
+          // Delay background cache by 5s so download doesn't compete with the stream
+          _cacheTimer = setTimeout(() => {
+            if (myId !== _playbackId) return;
+            FileSystem.downloadAsync(proxyUrl, localPath)
+              .then(() => saveSongMetadata(song))
+              .catch(() => {});
+          }, 5000);
         }
 
         const { sound } = await Audio.Sound.createAsync(
           { uri: audioUri },
           { shouldPlay: true, progressUpdateIntervalMillis: 500 },
           (status: AVPlaybackStatus) => {
+            // Guard against stale callbacks from a previous song
+            if (myId !== _playbackId) return;
             if (!status.isLoaded) return;
             set({
               positionMs: status.positionMillis ?? 0,
@@ -135,6 +145,21 @@ export const usePlayerStore = create<PlayerState & PlayerActions>(
 
         _sound = sound;
         set({ isLoading: false, isPlaying: true });
+
+        // Warm up the server cache for the next song so it starts instantly
+        const { queue, queueIndex } = get();
+        const nextSong = queue[queueIndex + 1];
+        if (nextSong) {
+          const nextLocalPath = FileSystem.cacheDirectory + nextSong.youtubeId + ".audio";
+          FileSystem.getInfoAsync(nextLocalPath).then(({ exists }) => {
+            if (exists || myId !== _playbackId) return;
+            SecureStore.getItemAsync("access_token").then(token => {
+              fetch(`${API_BASE}/songs/${nextSong.youtubeId}/audio?token=${token ?? ""}`, {
+                headers: { Range: "bytes=0-1" },
+              }).catch(() => {});
+            });
+          });
+        }
       } catch (e) {
         // Delete the cached file so next tap forces a fresh download
         await FileSystem.deleteAsync(localPath, { idempotent: true }).catch(() => {});

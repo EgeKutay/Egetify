@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -19,6 +20,25 @@ import { usePlaylistStore } from '../store/playlistStore';
 import { usePlayerStore } from '../store/playerStore';
 import SongCard from '../components/SongCard';
 import MiniPlayer from '../components/MiniPlayer';
+
+function playlistDetailPath(id: number) {
+  return FileSystem.documentDirectory + `_playlist_${id}.json`;
+}
+async function savePlaylistDetail(playlist: Playlist) {
+  try {
+    await FileSystem.writeAsStringAsync(playlistDetailPath(playlist.id), JSON.stringify(playlist));
+  } catch {}
+}
+async function loadPlaylistDetail(id: number): Promise<Playlist | null> {
+  try {
+    const path = playlistDetailPath(id);
+    const { exists } = await FileSystem.getInfoAsync(path);
+    if (!exists) return null;
+    return JSON.parse(await FileSystem.readAsStringAsync(path)) as Playlist;
+  } catch {
+    return null;
+  }
+}
 
 type Nav = StackNavigationProp<RootStackParamList>;
 type RouteT = RouteProp<RootStackParamList, 'Playlist'>;
@@ -40,8 +60,14 @@ export default function PlaylistScreen() {
       setError(null);
       const data = await getPlaylistDetail(playlistId);
       setPlaylist(data);
-    } catch (err: any) {
-      setError(err.message ?? 'Could not load playlist');
+      savePlaylistDetail(data);
+    } catch {
+      const cached = await loadPlaylistDetail(playlistId);
+      if (cached) {
+        setPlaylist(cached);
+      } else {
+        setError('No internet connection and no cached data');
+      }
     } finally {
       setLoading(false);
     }

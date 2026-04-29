@@ -1,0 +1,5 @@
+1-The cache list doesnt show cached urls eventhough music is cached.
+2-the video stopped after playing with Playback error Player does not exist on middle of the song.(Probably related to caching algorithm).
+3-After sign in automatically keep as signed in unless I click on sign out. so I can go to Playlist and play music while I am offline in the app.
+4-Caching is happening in real time during playback. As a result, only the played segment (e.g., 00:00–01:20) is cached, while the remaining content is unavailable and causes errors(probably related error number two). Update this to cache the entire media file independently of playback. And start caching all after short time like 5 sec to cache entire video instead partially.
+While playing current he music fetch the next music so I can play the next music faster without initial waiting time.
