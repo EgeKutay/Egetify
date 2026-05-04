@@ -19,13 +19,13 @@ Get these from [Google Cloud Console](https://console.cloud.google.com/) (enable
 
 ## Prerequisites
 
-| Tool | Required version | Your version |
-|------|-----------------|--------------|
-| JDK | 17+ | ✅ 17 |
-| Maven | 3.8+ | ✅ 3.8.3 |
-| Node.js | 18+ | ✅ 22 |
-| PostgreSQL | 14+ | ⚠️ Install needed |
-| Android Studio + emulator | API 31+ | — |
+| Tool | Required version | 
+|------|-----------------|
+| JDK | 17+ |
+| Maven | 3.8+ |
+| Node.js | 18+ |
+| PostgreSQL | 14+ | 
+| Android Studio + emulator | API 31+ |
 
 ### Install PostgreSQL
 
