@@ -1,6 +1,6 @@
 # Egetify
 
-Personal YouTube music streaming app for Android (Samsung S21FE).  
+Personal YouTube music streaming app for Android.  
 **Royal Blue** theme · React Native (Expo) frontend · Java Spring Boot backend · PostgreSQL.
 
 ---
