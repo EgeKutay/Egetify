@@ -55,16 +55,14 @@
 
 ## 7. What I need from you
 
-> Your answer:
-> Path: C:\Users\Decard\Desktop\ClaudeProjects\Egetify
-> Start off with porject folder structure where front-end and backend seperated as folders.
-> Build each feature one by one.
-> use clear file names and comments.
-> Give me working code I can run and simulate anroid app locally
-> Cache search results and metadata in PostgreSQL to minimize YouTube API calls (10,000 unit daily limit)
-> User stories I provided must be tested by BDD and all test must pass
-> Give me commands to run in read me file in for powershell.
-> I already created repo for the project, create front-end and backend-folder to implement features
+> - Start off with porject folder structure where front-end and backend seperated as folders.
+> - Build each feature one by one.
+> - use clear file names and comments.
+> - Give me working code I can run and simulate anroid app locally
+> - Cache search results and metadata in PostgreSQL to minimize YouTube API calls (10,000 unit daily limit)
+> - User stories I provided must be tested by BDD and all test must pass
+> - Give me commands to run in read me file in for powershell.
+> - I already created repo for the project, create front-end and backend-folder to implement features
 
 ## 8. Reference / inspiration (optional)
 
