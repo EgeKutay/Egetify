@@ -6,15 +6,15 @@
 
 ## 2. Core features
 
-> As a user I want to use this music app on mobile phone (android preferably)
-> As a user I want to search for music over the internet.
-> As a user I want to get recommendations using Youtube recommendation algorithm.
-> As a user I want to play and pause music functionality as same as spotify when I click on a music.
-> As a user I want to create play list and add music to them. After addition I want able to delete or remove from the playlist.
-> As a user I want to login with my google account.
-> As a user whenever a music ends I want next music to play automatically in playlist. If the music is not in the any play list then next recommended music should be played.
-> As a user music should continue playing when the app is minimized or screen is locked.
-> As a user I want to see error screen when connection or video can't load.
+> - As a user I want to use this music app on mobile phone (android preferably)
+> - As a user I want to search for music over the internet.
+> - As a user I want to get recommendations using Youtube recommendation algorithm.
+> - As a user I want to play and pause music functionality as same as spotify when I click on a music.
+> - As a user I want to create play list and add music to them. After addition I want able to delete or remove from the playlist.
+> - As a user I want to login with my google account.
+> - As a user whenever a music ends I want next music to play automatically in playlist. If the music is not in the any play list then next recommended music should be played.
+> - As a user music should continue playing when the app is minimized or screen is locked.
+> - As a user I want to see error screen when connection or video can't load.
 
 ---
 
