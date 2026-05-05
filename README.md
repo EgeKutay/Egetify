@@ -1,6 +1,6 @@
 # Egetify
 
-Personal YouTube music streaming app for Android.  
+Personal YouTube music streaming app for Android inspired from Spotify.  
 **Royal Blue** theme · React Native (Expo) frontend · Java Spring Boot backend · PostgreSQL.
 
 ---
