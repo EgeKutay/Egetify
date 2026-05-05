@@ -5,12 +5,6 @@ Personal YouTube music streaming app for Android.
 
 ---
 
-## Before You Start — Required API Keys
-
-Get these from [Google Cloud Console](https://console.cloud.google.com/) (enable **YouTube Data API v3** and **Google Identity**):
-
----
-
 ## Prerequisites
 
 | Tool | Required version | 
