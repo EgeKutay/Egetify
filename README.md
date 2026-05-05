@@ -2,6 +2,7 @@
 
 Personal YouTube music streaming app for Android inspired from Spotify.  
 **Royal Blue** theme · React Native (Expo) frontend · Java Spring Boot backend · PostgreSQL.
+This application main functionalities finished within 1 week. Thanks to Claude Code =)
 
 ---
 
