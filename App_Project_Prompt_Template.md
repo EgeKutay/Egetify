@@ -2,7 +2,7 @@
 
 ## 1. What I'm building
 
-## A personal, non-commercial music streaming app (Android) for Android that uses YouTube as its music source. I can search, play, create playlists, and get recommendations. For my use only
+## A personal, non-commercial music streaming app (Android) that uses YouTube as its music source. I can search, play, create playlists, and get recommendations. For my use only
 
 ## 2. Core features
 
