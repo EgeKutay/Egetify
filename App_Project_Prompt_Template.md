@@ -65,15 +65,12 @@
 > - I already created repo for the project, create front-end and backend-folder to implement features
 
 ## 8. Reference / inspiration (optional)
-
+> Much like spotify green theme, this application theme must be blue instead green (Royal Blue).
 > while not music play and on the playlist: https://storage.googleapis.com/pr-newsroom-wp/1/2021/05/Playlist-RR.png
 > while music playing: https://www.reddit.com/media?url=https%3A%2F%2Fi.redd.it%2Fnow-playing-ui-which-better-v0-fi68a63zagkb1.jpg%3Fwidth%3D1840%26format%3Dpjpg%26auto%3Dwebp%26s%3Dabb09d729101db58fea4b6b8b1602fac6a683872
 
 ---
 
 ## 9. Constraints (optional)
-
-> Much like spotify green theme, this application theme must be blue instead green (Royal Blue).
-> Buttons must be functional meaning every button should work as Intented.
 > When one dependency is missing or causing problems let me know instead of trying to figure out by yourself.
 > if you need authorization such as API key from google let me know.
