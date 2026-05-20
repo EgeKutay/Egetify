@@ -4,6 +4,12 @@ Personal YouTube music streaming app for Android inspired from Spotify.
 **Royal Blue** theme · React Native (Expo) frontend · Java Spring Boot backend · PostgreSQL.
 
 This application main functionalities finished within 1 week. Thanks to Claude Code =)
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/f94485ed-ca99-4b00-8372-48450115b164" alt="WhatsApp Image 3" height="500">
+  <img src="https://github.com/user-attachments/assets/ff56c1bb-ad2e-468d-8557-8320836ea5b5" alt="WhatsApp Image 2" height="500">
+  <img src="https://github.com/user-attachments/assets/1f4fa341-1624-460b-ad8c-4128d799881f" alt="WhatsApp Image 1" height="500">
+
+</p>
 
 ---
 
