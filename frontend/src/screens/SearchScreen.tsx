@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -8,6 +8,7 @@ import {
   Keyboard,
   TouchableOpacity,
 } from 'react-native';
+import * as FileSystem from 'expo-file-system';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
@@ -22,6 +23,42 @@ import MiniPlayer from '../components/MiniPlayer';
 
 type Nav = StackNavigationProp<RootStackParamList>;
 
+const HISTORY_PATH = FileSystem.documentDirectory + '_search_history.json';
+const MAX_HISTORY = 20;
+
+async function loadHistory(): Promise<string[]> {
+  try {
+    const { exists } = await FileSystem.getInfoAsync(HISTORY_PATH);
+    if (!exists) return [];
+    return JSON.parse(await FileSystem.readAsStringAsync(HISTORY_PATH));
+  } catch {
+    return [];
+  }
+}
+
+async function saveHistory(history: string[]) {
+  try {
+    await FileSystem.writeAsStringAsync(HISTORY_PATH, JSON.stringify(history));
+  } catch {}
+}
+
+async function addToHistory(query: string, history: string[]): Promise<string[]> {
+  const next = [query, ...history.filter(h => h.toLowerCase() !== query.toLowerCase())].slice(0, MAX_HISTORY);
+  await saveHistory(next);
+  return next;
+}
+
+async function fetchYoutubeSuggestions(query: string): Promise<string[]> {
+  try {
+    const url = `https://suggestqueries.google.com/complete/search?client=firefox&ds=yt&q=${encodeURIComponent(query)}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return (data[1] as string[]).slice(0, 5);
+  } catch {
+    return [];
+  }
+}
+
 export default function SearchScreen() {
   const navigation = useNavigation<Nav>();
   const { playSong, currentSong } = usePlayerStore();
@@ -31,16 +68,49 @@ export default function SearchScreen() {
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<string[]>([]);
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    loadHistory().then(setHistory);
+  }, []);
+
+  const updateSuggestions = useCallback((text: string) => {
+    if (!text.trim()) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+    setShowSuggestions(true);
+    if (debounceTimer.current) clearTimeout(debounceTimer.current);
+    debounceTimer.current = setTimeout(async () => {
+      const ytSuggestions = await fetchYoutubeSuggestions(text);
+      const historySuggestions = history.filter(h =>
+        h.toLowerCase().startsWith(text.toLowerCase()) && !ytSuggestions.includes(h)
+      );
+      setSuggestions([...historySuggestions.slice(0, 3), ...ytSuggestions]);
+    }, 300);
+  }, [history]);
+
+  const handleChangeText = (text: string) => {
+    setQuery(text);
+    updateSuggestions(text);
+  };
 
   const handleSearch = async (q: string) => {
     if (!q.trim()) return;
     Keyboard.dismiss();
+    setShowSuggestions(false);
     setLoading(true);
     setSearched(true);
     setError(null);
     try {
       const data = await searchMusic(q.trim());
       setResults(data);
+      const next = await addToHistory(q.trim(), history);
+      setHistory(next);
     } catch (err: any) {
       setError(err.message ?? 'Search failed. Check your connection.');
       setResults([]);
@@ -49,10 +119,19 @@ export default function SearchScreen() {
     }
   };
 
+  const handleSuggestionPress = (s: string) => {
+    setQuery(s);
+    handleSearch(s);
+  };
+
   const handleSongPress = (song: Song) => {
     playSong(song, results);
     navigation.navigate('NowPlaying');
   };
+
+  const historySuggestions = !query.trim()
+    ? history.slice(0, 8)
+    : [];
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
@@ -60,12 +139,40 @@ export default function SearchScreen() {
 
       <SearchBar
         value={query}
-        onChangeText={setQuery}
+        onChangeText={handleChangeText}
         onSubmit={() => handleSearch(query)}
         placeholder="Songs, artists, albums…"
       />
 
-      {/* States */}
+      {/* Suggestions dropdown */}
+      {showSuggestions && suggestions.length > 0 && (
+        <View style={styles.suggestionsBox}>
+          {suggestions.map((s, i) => (
+            <TouchableOpacity
+              key={i}
+              style={styles.suggestionRow}
+              onPress={() => handleSuggestionPress(s)}
+            >
+              <Ionicons name="search-outline" size={16} color={Colors.iconInactive} style={styles.suggestionIcon} />
+              <Text style={styles.suggestionText} numberOfLines={1}>{s}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
+      {/* Past searches shown when bar is focused but empty */}
+      {!showSuggestions && !searched && historySuggestions.length > 0 && (
+        <View style={styles.historySection}>
+          <Text style={styles.sectionLabel}>Recent searches</Text>
+          {historySuggestions.map((h, i) => (
+            <TouchableOpacity key={i} style={styles.suggestionRow} onPress={() => handleSuggestionPress(h)}>
+              <Ionicons name="time-outline" size={16} color={Colors.iconInactive} style={styles.suggestionIcon} />
+              <Text style={styles.suggestionText} numberOfLines={1}>{h}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+
       {loading && (
         <View style={styles.centered}>
           <ActivityIndicator size="large" color={Colors.primary} />
@@ -104,8 +211,7 @@ export default function SearchScreen() {
         />
       )}
 
-      {/* Placeholder when nothing searched yet */}
-      {!loading && !error && !searched && (
+      {!loading && !error && !searched && historySuggestions.length === 0 && (
         <View style={styles.centered}>
           <Ionicons name="search-outline" size={56} color={Colors.textMuted} />
           <Text style={styles.statusText}>Search for any song or artist</Text>
@@ -147,4 +253,34 @@ const styles = StyleSheet.create({
     borderRadius: 20,
   },
   retryText: { color: '#fff', fontWeight: '700' },
+  suggestionsBox: {
+    marginHorizontal: 20,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.divider,
+    overflow: 'hidden',
+    zIndex: 10,
+  },
+  historySection: {
+    marginHorizontal: 20,
+    marginTop: 8,
+  },
+  sectionLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textMuted,
+    marginBottom: 4,
+    paddingHorizontal: 4,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 11,
+    paddingHorizontal: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.divider,
+  },
+  suggestionIcon: { marginRight: 10 },
+  suggestionText: { fontSize: 15, color: Colors.textPrimary, flex: 1 },
 });

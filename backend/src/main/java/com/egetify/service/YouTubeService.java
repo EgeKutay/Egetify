@@ -82,8 +82,6 @@ public class YouTubeService {
                             .queryParam("part", "snippet")
                             .queryParam("q", query)
                             .queryParam("type", "video")
-                            .queryParam("videoCategoryId", "10")   // Music
-                            .queryParam("videoDuration", "medium") // 4–20 min, excludes long mixes
                             .queryParam("maxResults", maxResults)
                             .queryParam("key", apiKey)
                             .build())
